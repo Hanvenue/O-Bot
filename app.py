@@ -100,28 +100,39 @@ def get_current_market():
                 taker_fee = taker_investment * 0.002  # 0.2% taker fee
                 maker_profit_if_win = (1 - maker_price) * shares
                 taker_profit_if_win = (1 - taker_price) * shares
+                # 계정 배정 (실행 시와 동일한 로직)
+                maker_account = account_manager.get_account_with_lowest_balance()
+                if not maker_account:
+                    maker_account = account_manager.get_account(1)
+                other_accounts = [a for a in account_manager.get_all_accounts() if maker_account and a.id != maker_account.id]
+                taker_account = other_accounts[0] if other_accounts else None
+                
+                maker_data = {
+                    'side': direction,
+                    'shares': shares,
+                    'price': round(maker_price, 2),
+                    'price_display': f'{int(maker_price*100)}¢',
+                    'investment': round(maker_investment, 2),
+                    'profit_if_win': round(maker_profit_if_win, 2),
+                    'fee': 0,
+                    'account_id': maker_account.id if maker_account else None,
+                }
+                taker_data = {
+                    'side': 'DOWN' if direction == 'UP' else 'UP',
+                    'shares': shares,
+                    'price': round(taker_price, 2),
+                    'price_display': f'{int(taker_price*100)}¢',
+                    'investment': round(taker_investment, 2),
+                    'profit_if_win': round(taker_profit_if_win, 2),
+                    'fee': round(taker_fee, 4),
+                    'account_id': taker_account.id if taker_account else None,
+                }
                 market_data['strategy_preview'] = {
                     'status': 'arbitrage_ready',
                     'status_message': '차익거래 가능 - Maker-Taker 전략',
                     'recommended_strategy': f'Maker {direction} + Taker {"DOWN" if direction == "UP" else "UP"}',
-                    'maker': {
-                        'side': direction,
-                        'shares': shares,
-                        'price': round(maker_price, 2),
-                        'price_display': f'{int(maker_price*100)}¢',
-                        'investment': round(maker_investment, 2),
-                        'profit_if_win': round(maker_profit_if_win, 2),
-                        'fee': 0,
-                    },
-                    'taker': {
-                        'side': 'DOWN' if direction == 'UP' else 'UP',
-                        'shares': shares,
-                        'price': round(taker_price, 2),
-                        'price_display': f'{int(taker_price*100)}¢',
-                        'investment': round(taker_investment, 2),
-                        'profit_if_win': round(taker_profit_if_win, 2),
-                        'fee': round(taker_fee, 4),
-                    },
+                    'maker': maker_data,
+                    'taker': taker_data,
                     'total_investment': round(total_investment, 2),
                     'guaranteed_loss': round(taker_fee, 4),
                     'loss_rate_pct': round(taker_fee / total_investment * 100, 2) if total_investment else 0,
@@ -152,54 +163,6 @@ def get_current_market():
     except Exception as e:
         logger.error(f"❌ Market error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/market/demo')
-def get_demo_strategy():
-    """데모용 전략 미리보기 (마켓 없을 때 UI 확인용)"""
-    shares = request.args.get('shares', type=int, default=10)
-    shares = max(1, shares) if shares else 10
-    maker_price = 0.88
-    taker_price = 0.12
-    maker_investment = maker_price * shares
-    taker_investment = taker_price * shares
-    total = maker_investment + taker_investment
-    fee = taker_investment * 0.002
-    return jsonify({
-        'success': True,
-        'demo': True,
-        'strategy_preview': {
-            'status': 'arbitrage_ready',
-            'status_message': '차익거래 기회 없음 - 손실 최소화 전략 제시 (데모)',
-            'recommended_strategy': 'Maker UP + Taker DOWN',
-            'maker': {
-                'side': 'UP',
-                'shares': shares,
-                'price': maker_price,
-                'price_display': '88¢',
-                'investment': round(maker_investment, 2),
-                'profit_if_win': round((1 - maker_price) * shares, 2),
-                'fee': 0,
-            },
-            'taker': {
-                'side': 'DOWN',
-                'shares': shares,
-                'price': taker_price,
-                'price_display': '12¢',
-                'investment': round(taker_investment, 2),
-                'profit_if_win': round((1 - taker_price) * shares, 2),
-                'fee': round(fee, 4),
-            },
-            'total_investment': round(total, 2),
-            'guaranteed_loss': round(fee, 4),
-            'loss_rate_pct': round(fee / total * 100, 2),
-            'outcome_summary': {
-                'total_received': round(total, 2),
-                'net_loss': round(-fee, 2),
-                'message': '어느 결과가 나와도 총 투자금액 회수, 수수료만 손실'
-            }
-        }
-    })
 
 
 @app.route('/api/market/<int:market_id>/orderbook')

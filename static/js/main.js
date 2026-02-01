@@ -55,33 +55,16 @@ class GyeongBot {
             if (data.success && data.market) {
                 this.currentMarket = data.market;
                 this.renderMarket();
-                this.renderStrategyPreview(data.market, false);
+                this.renderExecutionPreview(data.market);
                 this.updateTradeEstimate();
             } else {
                 this.renderNoMarket();
-                // 마켓 없을 때 동업자 봇 스타일 데모 전략 표시
-                const demoRes = await fetch(`/api/market/demo?shares=${shares}`);
-                const demoData = await demoRes.json();
-                if (demoData.success && demoData.strategy_preview) {
-                    this.renderStrategyPreview({ strategy_preview: demoData.strategy_preview }, true);
-                } else {
-                    this.hideStrategyPreview();
-                }
+                this.renderExecutionPreview(null);
             }
         } catch (error) {
             console.error('Failed to load market:', error);
             this.renderNoMarket();
-            try {
-                const demoRes = await fetch('/api/market/demo?shares=10');
-                const demoData = await demoRes.json();
-                if (demoData.success && demoData.strategy_preview) {
-                    this.renderStrategyPreview({ strategy_preview: demoData.strategy_preview }, true);
-                } else {
-                    this.hideStrategyPreview();
-                }
-            } catch (e) {
-                this.hideStrategyPreview();
-            }
+            this.renderExecutionPreview(null);
         }
     }
     
@@ -134,78 +117,46 @@ class GyeongBot {
         executeBtn.disabled = !market.trade_ready;
     }
     
-    renderStrategyPreview(market, isDemo = false) {
-        const container = document.getElementById('strategyPreview');
-        if (!container) return;
+    renderExecutionPreview(market) {
+        const placeholder = document.getElementById('executionPlaceholder');
+        const details = document.getElementById('executionDetails');
+        if (!placeholder || !details) return;
         
         const preview = market?.strategy_preview;
-        if (!preview) {
-            container.style.display = 'none';
+        if (!preview || preview.status !== 'arbitrage_ready' || !preview.maker) {
+            placeholder.style.display = 'block';
+            details.style.display = 'none';
+            placeholder.textContent = market 
+                ? (preview?.status_message || '거래 조건 충족 시 실행 예정 정보가 표시됩니다')
+                : '거래 조건 충족 시 실행 예정 정보가 표시됩니다';
             return;
         }
         
-        container.style.display = 'block';
-        const demoBadge = isDemo ? '<span class="demo-badge">데모</span>' : '';
-        
-        if (preview.status === 'arbitrage_ready' && preview.maker) {
-            const lossRate = preview.loss_rate_pct ?? 0;
-            const lossColor = lossRate === 0 ? '#28a745' : '#dc3545';
-            container.innerHTML = `
-                <div class="strategy-box status-pink">
-                    <h4>▲ ${preview.status_message} ${demoBadge}</h4>
-                </div>
-                <div class="strategy-box status-yellow">
-                    <h4>▲ 최소 손실 배분 (손실률 ${lossRate.toFixed(2)}%)</h4>
-                    <p class="strategy-detail">차익거래 가능, Maker(수수료 0%) + Taker 조합으로 손실 최소화</p>
-                </div>
-                <div class="strategy-box status-gray">
-                    <h4>💡 추천 전략</h4>
-                    <p class="strategy-detail">${preview.recommended_strategy}</p>
-                </div>
-                <div class="strategy-box status-gray">
-                    <h4>Maker ${preview.maker.side}</h4>
-                    <div class="strategy-detail">Shares: ${preview.maker.shares} (Limit Price: ${preview.maker.price_display})</div>
-                    <div class="strategy-row">배팅 금액: <span class="highlight">$${preview.maker.investment.toFixed(2)}</span></div>
-                    <div class="strategy-detail">✓ ${preview.maker.side} 적중시: +$${preview.maker.profit_if_win.toFixed(2)} 수익</div>
-                </div>
-                <div class="strategy-box status-gray">
-                    <h4>Taker ${preview.taker.side}</h4>
-                    <div class="strategy-detail">배팅 금액: $${preview.taker.investment.toFixed(2)} (${(preview.taker.price*100).toFixed(1)}%)</div>
-                    <div class="strategy-detail">✓ ${preview.taker.side} 적중시: +$${preview.taker.profit_if_win.toFixed(2)} 수익</div>
-                </div>
-                <div class="strategy-box status-gray">
-                    <h4>■ 총 투자금액</h4>
-                    <div class="strategy-row"><span>$${preview.total_investment.toFixed(2)}</span></div>
-                </div>
-                <div class="strategy-box status-pink">
-                    <h4>확정 손실</h4>
-                    <div class="strategy-row highlight" style="color: ${lossColor}">-$${preview.guaranteed_loss.toFixed(2)} (-${lossRate.toFixed(2)}%)</div>
-                </div>
-                <div class="strategy-box status-yellow">
-                    <h4>💡 어느 결과가 나와도</h4>
-                    <div class="outcome-summary">
-                        <div class="strategy-row">총 받는 금액: <span class="highlight">$${preview.outcome_summary.total_received.toFixed(2)}</span></div>
-                        <div class="strategy-row">총 투자금액: <span>$${preview.total_investment.toFixed(2)}</span></div>
-                        <div class="strategy-row">순손실: <span class="highlight">$${preview.outcome_summary.net_loss.toFixed(2)}</span></div>
-                    </div>
-                </div>
-            `;
-        } else if (preview.status === 'waiting' || preview.status === 'no_orderbook') {
-            container.innerHTML = `
-                <div class="strategy-box status-pink">
-                    <h4>⏳ ${preview.status_message}</h4>
-                </div>
-            `;
-        } else {
-            container.style.display = 'none';
-        }
-    }
-    
-    hideStrategyPreview() {
-        const container = document.getElementById('strategyPreview');
-        if (container) {
-            container.style.display = 'none';
-        }
+        const m = preview.maker;
+        const t = preview.taker;
+        const makerAcc = m.account_id != null ? `계정 ${m.account_id}` : 'Maker 계정';
+        const takerAcc = t.account_id != null ? `계정 ${t.account_id}` : 'Taker 계정';
+        placeholder.style.display = 'none';
+        details.style.display = 'block';
+        details.innerHTML = `
+            <h4>실행 시 수행될 거래</h4>
+            <div class="execution-row">
+                <span>Maker ${m.side}</span>
+                <span>${makerAcc} → Limit ${m.price_display} × ${m.shares} shares = $${m.investment.toFixed(2)}</span>
+            </div>
+            <div class="execution-row">
+                <span>Taker ${t.side}</span>
+                <span>${takerAcc} → $${t.investment.toFixed(2)}</span>
+            </div>
+            <div class="execution-row execution-total">
+                <span>총 투자</span>
+                <span>$${preview.total_investment.toFixed(2)}</span>
+            </div>
+            <div class="execution-row">
+                <span>예상 수수료</span>
+                <span>-$${preview.guaranteed_loss.toFixed(4)}</span>
+            </div>
+        `;
     }
     
     renderNoMarket() {
@@ -219,7 +170,6 @@ class GyeongBot {
         }
         const executeBtn = document.getElementById('executeBtn');
         if (executeBtn) executeBtn.disabled = true;
-        this.hideStrategyPreview();
     }
     
     renderAccounts() {

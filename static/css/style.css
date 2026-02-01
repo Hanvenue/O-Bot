@@ -109,80 +109,39 @@ section h2, section h3 {
     margin-top: 16px;
 }
 
-/* Strategy Preview - 동업자 봇 스타일 */
-.strategy-section {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-}
-
-.strategy-section h2 {
-    color: #5d4037;
+/* 거래 실행 미리보기 */
+.execution-preview {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
     margin-bottom: 16px;
 }
 
-.strategy-preview {
-    margin-top: 0;
-}
-
-.strategy-box {
-    padding: 16px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-}
-
-.strategy-box.status-pink {
-    background: #ffe4ec;
-    border: 1px solid #f48fb1;
-    color: #880e4f;
-}
-
-.strategy-box.status-yellow {
-    background: #fffde7;
-    border: 1px solid #ffee58;
-    color: #5d4037;
-}
-
-.strategy-box.status-gray {
-    background: #f5f5f5;
-    border: 1px solid #e0e0e0;
-    color: #424242;
-}
-
-.strategy-box h4 {
-    margin-bottom: 8px;
-    font-size: 1rem;
-}
-
-.strategy-box .strategy-detail {
+.execution-placeholder {
+    color: #6c757d;
     font-size: 0.9rem;
-    line-height: 1.6;
-    margin: 4px 0;
+    margin: 0;
 }
 
-.strategy-box .strategy-row {
+.execution-details h4 {
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.execution-row {
     display: flex;
     justify-content: space-between;
-    margin: 6px 0;
+    padding: 6px 0;
+    font-size: 0.9rem;
 }
 
-.strategy-box .highlight {
-    font-weight: 700;
-}
-
-.strategy-box .outcome-summary {
-    background: rgba(255,255,255,0.7);
-    padding: 12px;
-    border-radius: 6px;
-    margin-top: 12px;
-}
-
-.demo-badge {
-    display: inline-block;
-    background: #9c27b0;
-    color: white;
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-left: 8px;
+.execution-row.execution-total {
+    font-weight: 600;
+    border-top: 1px solid #dee2e6;
+    margin-top: 8px;
+    padding-top: 12px;
 }
 
 /* Trading Controls */

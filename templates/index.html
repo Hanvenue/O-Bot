@@ -21,11 +21,6 @@
                 <div class="loading">마켓 로딩 중...</div>
             </div>
         </section>
-        <!-- Strategy Preview (동업자 봇 스타일 - 항상 표시) -->
-        <section class="strategy-section" id="strategySection">
-            <h2>💡 거래 전략</h2>
-            <div class="strategy-preview" id="strategyPreview" style="display: none;"></div>
-        </section>
 
         <!-- Trading Controls -->
         <section class="trading-controls">
@@ -44,6 +39,14 @@
                     <span>예상 수수료:</span>
                     <span id="estimatedFee">$0.00</span>
                 </div>
+            </div>
+            
+            <!-- 거래 실행 시 어떻게 될지 (실제 API 데이터 기반) -->
+            <div class="execution-preview" id="executionPreview">
+                <p class="execution-placeholder" id="executionPlaceholder">
+                    거래 조건 충족 시 실행 예정 정보가 표시됩니다
+                </p>
+                <div class="execution-details" id="executionDetails" style="display: none;"></div>
             </div>
             
             <div class="button-group">
