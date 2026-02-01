@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경봇 (Gyeong Bot) - Predict.fun 자동 거래</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🤖 경봇 (Gyeong Bot)</h1>
+            <p class="subtitle">Predict.fun BTC/USD 15분 자동거래</p>
+        </header>
+
+        <!-- Market Hero Section -->
+        <section class="hero-market" id="heroMarket">
+            <h2>📊 현재 마켓</h2>
+            <div class="market-card" id="marketCard">
+                <div class="loading">마켓 로딩 중...</div>
+            </div>
+            <!-- Strategy Preview (동업자 봇 스타일) -->
+            <div class="strategy-preview" id="strategyPreview" style="display: none;"></div>
+        </section>
+
+        <!-- Trading Controls -->
+        <section class="trading-controls">
+            <h3>거래 설정</h3>
+            <div class="control-group">
+                <label for="sharesInput">Shares 수량:</label>
+                <input type="number" id="sharesInput" min="1" value="10" />
+            </div>
+            
+            <div class="trade-info" id="tradeInfo">
+                <div class="info-row">
+                    <span>예상 투자:</span>
+                    <span id="estimatedInvestment">$0.00</span>
+                </div>
+                <div class="info-row">
+                    <span>예상 수수료:</span>
+                    <span id="estimatedFee">$0.00</span>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button id="executeBtn" class="btn btn-primary" disabled>
+                    거래 실행
+                </button>
+                <button id="autoToggleBtn" class="btn btn-auto">
+                    🤖 Auto 모드 시작
+                </button>
+            </div>
+            
+            <div class="status-message" id="statusMessage"></div>
+        </section>
+
+        <!-- Auto Mode Stats -->
+        <section class="auto-stats" id="autoStats" style="display: none;">
+            <h3>🤖 Auto 모드 통계</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <label>상태</label>
+                    <value id="autoStatus">⏸️ 정지됨</value>
+                </div>
+                <div class="stat-item">
+                    <label>총 거래</label>
+                    <value id="totalTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>성공</label>
+                    <value id="successfulTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>실패</label>
+                    <value id="failedTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>승률</label>
+                    <value id="successRate">0%</value>
+                </div>
+            </div>
+        </section>
+
+        <!-- Accounts Section -->
+        <section class="accounts">
+            <h3>계정 관리 (<span id="accountCount">0</span>/100)</h3>
+            <div class="accounts-list" id="accountsList">
+                <div class="loading">계정 로딩 중...</div>
+            </div>
+        </section>
+
+        <!-- Trade History -->
+        <section class="trade-history">
+            <h3>거래 내역</h3>
+            <div class="history-list" id="historyList">
+                <p class="empty-state">거래 내역이 없습니다</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
