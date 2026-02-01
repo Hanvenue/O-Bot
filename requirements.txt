@@ -1,6 +1,13 @@
-Flask
-python-dotenv
-python-telegram-bot
+# Core
+Flask>=3.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Predict.fun
 predict-sdk==0.0.12
-eth-account>=0.11.0
-requests
+
+# Web3
+eth-account>=0.10.0
+
+# Telegram
+python-telegram-bot>=20.7
