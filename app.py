@@ -154,6 +154,54 @@ def get_current_market():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/market/demo')
+def get_demo_strategy():
+    """데모용 전략 미리보기 (마켓 없을 때 UI 확인용)"""
+    shares = request.args.get('shares', type=int, default=10)
+    shares = max(1, shares) if shares else 10
+    maker_price = 0.88
+    taker_price = 0.12
+    maker_investment = maker_price * shares
+    taker_investment = taker_price * shares
+    total = maker_investment + taker_investment
+    fee = taker_investment * 0.002
+    return jsonify({
+        'success': True,
+        'demo': True,
+        'strategy_preview': {
+            'status': 'arbitrage_ready',
+            'status_message': '차익거래 기회 없음 - 손실 최소화 전략 제시 (데모)',
+            'recommended_strategy': 'Maker UP + Taker DOWN',
+            'maker': {
+                'side': 'UP',
+                'shares': shares,
+                'price': maker_price,
+                'price_display': '88¢',
+                'investment': round(maker_investment, 2),
+                'profit_if_win': round((1 - maker_price) * shares, 2),
+                'fee': 0,
+            },
+            'taker': {
+                'side': 'DOWN',
+                'shares': shares,
+                'price': taker_price,
+                'price_display': '12¢',
+                'investment': round(taker_investment, 2),
+                'profit_if_win': round((1 - taker_price) * shares, 2),
+                'fee': round(fee, 4),
+            },
+            'total_investment': round(total, 2),
+            'guaranteed_loss': round(fee, 4),
+            'loss_rate_pct': round(fee / total * 100, 2),
+            'outcome_summary': {
+                'total_received': round(total, 2),
+                'net_loss': round(-fee, 2),
+                'message': '어느 결과가 나와도 총 투자금액 회수, 수수료만 손실'
+            }
+        }
+    })
+
+
 @app.route('/api/market/<int:market_id>/orderbook')
 def get_market_orderbook(market_id):
     """Get orderbook for market"""
@@ -409,10 +457,12 @@ if __name__ == '__main__':
     else:
         logger.info("ℹ️ Telegram bot not configured (optional)")
         
-    # Run app
+    # Run app (포트 5001: macOS AirPlay가 5000 사용 시)
+    import os
+    port = int(os.getenv('PORT', 5001))
     app.run(
         debug=Config.DEBUG,
-        host='0.0.0.0',  # 0.0.0.0 = access from any device on network
-        port=5000,
-        threaded=True        # 추가!
+        host='0.0.0.0',
+        port=port,
+        threaded=True
     )

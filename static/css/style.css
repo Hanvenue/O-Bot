@@ -110,8 +110,17 @@ section h2, section h3 {
 }
 
 /* Strategy Preview - 동업자 봇 스타일 */
+.strategy-section {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+
+.strategy-section h2 {
+    color: #5d4037;
+    margin-bottom: 16px;
+}
+
 .strategy-preview {
-    margin-top: 20px;
+    margin-top: 0;
 }
 
 .strategy-box {
@@ -164,6 +173,16 @@ section h2, section h3 {
     padding: 12px;
     border-radius: 6px;
     margin-top: 12px;
+}
+
+.demo-badge {
+    display: inline-block;
+    background: #9c27b0;
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
 }
 
 /* Trading Controls */

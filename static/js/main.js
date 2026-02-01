@@ -52,19 +52,36 @@ class GyeongBot {
             const response = await fetch(`/api/market/current?shares=${shares}`);
             const data = await response.json();
             
-            if (data.success) {
+            if (data.success && data.market) {
                 this.currentMarket = data.market;
                 this.renderMarket();
-                this.renderStrategyPreview(data.market);
+                this.renderStrategyPreview(data.market, false);
                 this.updateTradeEstimate();
             } else {
                 this.renderNoMarket();
-                this.hideStrategyPreview();
+                // 마켓 없을 때 동업자 봇 스타일 데모 전략 표시
+                const demoRes = await fetch(`/api/market/demo?shares=${shares}`);
+                const demoData = await demoRes.json();
+                if (demoData.success && demoData.strategy_preview) {
+                    this.renderStrategyPreview({ strategy_preview: demoData.strategy_preview }, true);
+                } else {
+                    this.hideStrategyPreview();
+                }
             }
         } catch (error) {
             console.error('Failed to load market:', error);
             this.renderNoMarket();
-            this.hideStrategyPreview();
+            try {
+                const demoRes = await fetch('/api/market/demo?shares=10');
+                const demoData = await demoRes.json();
+                if (demoData.success && demoData.strategy_preview) {
+                    this.renderStrategyPreview({ strategy_preview: demoData.strategy_preview }, true);
+                } else {
+                    this.hideStrategyPreview();
+                }
+            } catch (e) {
+                this.hideStrategyPreview();
+            }
         }
     }
     
@@ -117,7 +134,7 @@ class GyeongBot {
         executeBtn.disabled = !market.trade_ready;
     }
     
-    renderStrategyPreview(market) {
+    renderStrategyPreview(market, isDemo = false) {
         const container = document.getElementById('strategyPreview');
         if (!container) return;
         
@@ -128,13 +145,14 @@ class GyeongBot {
         }
         
         container.style.display = 'block';
+        const demoBadge = isDemo ? '<span class="demo-badge">데모</span>' : '';
         
         if (preview.status === 'arbitrage_ready' && preview.maker) {
             const lossRate = preview.loss_rate_pct ?? 0;
             const lossColor = lossRate === 0 ? '#28a745' : '#dc3545';
             container.innerHTML = `
                 <div class="strategy-box status-pink">
-                    <h4>▲ ${preview.status_message}</h4>
+                    <h4>▲ ${preview.status_message} ${demoBadge}</h4>
                 </div>
                 <div class="strategy-box status-yellow">
                     <h4>▲ 최소 손실 배분 (손실률 ${lossRate.toFixed(2)}%)</h4>
