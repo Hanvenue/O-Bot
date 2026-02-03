@@ -101,15 +101,11 @@ class GyeongBot {
             <h3>${market.title}</h3>
             <div class="market-info">
                 <div class="info-item">
-                    <label>시작 가격</label>
+                    <label>Price to Beat (기준가)</label>
                     <value>$${market.start_price.toLocaleString()}</value>
                 </div>
-                <div class="info-item">
-                    <label>현재 BTC 가격</label>
-                    <value>$${market.current_btc_price.toLocaleString()}</value>
-                </div>
-                <div class="info-item">
-                    <label>가격 갭</label>
+                <div class="info-item info-item-gap">
+                    <label>가격 갭 (vs Price to Beat)</label>
                     <value style="color: ${gapColor}">${gapSign}$${gap.toLocaleString()}</value>
                 </div>
                 <div class="info-item">
