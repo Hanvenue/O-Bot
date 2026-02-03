@@ -106,9 +106,12 @@ class MarketService:
             categories = data.get('data', []) if data.get('success') else []
             
             for cat in categories:
+                cat_variant = cat.get('variantData') or {}
+                cat_start = cat_variant.get('startPrice') or 0.0
                 for m in cat.get('markets', []):
                     m['_startsAt'] = cat.get('startsAt')
                     m['_endsAt'] = cat.get('endsAt')
+                    m['_categoryStartPrice'] = cat_start
                     raw_list.append(m)
             
             # Fallback: /v1/markets if no categories
@@ -139,7 +142,15 @@ class MarketService:
     def _map_api_market_to_internal(self, m: dict) -> dict:
         """Map Predict.fun API market format to our Market format"""
         variant = m.get('variantData') or {}
-        start_price = variant.get('startPrice') or 0.0
+        start_price = (
+            variant.get('startPrice')
+            or m.get('_categoryStartPrice')
+            or 0.0
+        )
+        if isinstance(start_price, (int, float)):
+            start_price = float(start_price)
+        else:
+            start_price = 0.0
         
         return {
             'id': m.get('id'),
