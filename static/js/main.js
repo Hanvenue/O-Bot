@@ -1,5 +1,15 @@
 // 경봇 Dashboard JavaScript
 
+// 세션 만료 시 로그인 페이지로 리다이렉트
+async function fetchWithAuth(url, options = {}) {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+    }
+    return res;
+}
+
 class GyeongBot {
     constructor() {
         this.currentMarket = null;
@@ -19,6 +29,10 @@ class GyeongBot {
         // Set up event listeners
         document.getElementById('executeBtn').addEventListener('click', () => this.executeTrade());
         document.getElementById('autoToggleBtn').addEventListener('click', () => this.toggleAutoMode());
+        const refreshBtn = document.getElementById('floatingRefreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.refresh());
+        }
         document.getElementById('sharesInput').addEventListener('input', () => {
             this.updateTradeEstimate();
             clearTimeout(this._sharesDebounce);
@@ -33,7 +47,7 @@ class GyeongBot {
     
     async loadAccounts() {
         try {
-            const response = await fetch('/api/status');
+            const response = await fetchWithAuth('/api/status');
             const data = await response.json();
             
             if (data.success) {
@@ -46,10 +60,14 @@ class GyeongBot {
         }
     }
     
+    async refresh() {
+        await Promise.all([this.loadCurrentMarket(), this.loadAccounts()]);
+    }
+
     async loadCurrentMarket() {
         try {
             const shares = parseInt(document.getElementById('sharesInput')?.value) || 10;
-            const response = await fetch(`/api/market/current?shares=${shares}`);
+            const response = await fetchWithAuth(`/api/market/current?shares=${shares}`);
             const data = await response.json();
             
             if (data.success && data.market) {
@@ -226,7 +244,7 @@ class GyeongBot {
         executeBtn.textContent = '거래 실행 중...';
         
         try {
-            const response = await fetch('/api/trade/execute', {
+            const response = await fetchWithAuth('/api/trade/execute', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -266,7 +284,7 @@ class GyeongBot {
             btn.textContent = '시작 중...';
             
             try {
-                const response = await fetch('/api/auto/start', {
+                const response = await fetchWithAuth('/api/auto/start', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -301,7 +319,7 @@ class GyeongBot {
             btn.textContent = '중지 중...';
             
             try {
-                const response = await fetch('/api/auto/stop', {
+                const response = await fetchWithAuth('/api/auto/stop', {
                     method: 'POST'
                 });
                 
@@ -330,7 +348,7 @@ class GyeongBot {
     
     async updateAutoStats() {
         try {
-            const response = await fetch('/api/auto/stats');
+            const response = await fetchWithAuth('/api/auto/stats');
             const data = await response.json();
             
             if (data.success) {

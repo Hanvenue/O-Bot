@@ -13,12 +13,13 @@ class TradeValidator:
     """Validate trade conditions before execution"""
     
     @staticmethod
-    def validate_market(market_data: dict) -> tuple[bool, str, str]:
+    def validate_market(market_data: dict, skip_time_check: bool = False) -> tuple[bool, str, str]:
         """
         Validate if market meets trade conditions
         
         Args:
             market_data: Market information from Predict.fun
+            skip_time_check: If True, skip 5-min-before-end check (for manual trade)
             
         Returns:
             tuple: (is_valid, direction, reason)
@@ -27,7 +28,7 @@ class TradeValidator:
                 - reason: Explanation
         """
         try:
-            # 1. Check if market is ending soon (5 minutes before end)
+            # 1. Check market end time
             end_time = market_data.get('end_time')
             if not end_time:
                 return False, None, "No end time"
@@ -43,11 +44,12 @@ class TradeValidator:
             
             time_remaining = (end_time - datetime.now(timezone.utc)).total_seconds()
             
-            if time_remaining > Config.TIME_BEFORE_END:
-                return False, None, f"Too early: {int(time_remaining)}s remaining"
-            
             if time_remaining < 0:
                 return False, None, "Market already ended"
+            
+            # Skip 5-min-before-end check for manual trade
+            if not skip_time_check and time_remaining > Config.TIME_BEFORE_END:
+                return False, None, f"Too early: {int(time_remaining)}s remaining"
             
             logger.info(f"⏱️ Time remaining: {int(time_remaining)}s")
             

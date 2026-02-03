@@ -388,3 +388,30 @@ section h2, section h3 {
     font-weight: bold;
     color: #333;
 }
+
+/* 좌측 하단 플로팅 리프레시 버튼 */
+.floating-refresh {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #667eea;
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 1000;
+}
+
+.floating-refresh:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.floating-refresh:active {
+    transform: scale(0.98);
+}

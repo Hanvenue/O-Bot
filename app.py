@@ -1,7 +1,7 @@
 """
 경봇 (Gyeong Bot) - Main Flask Application
 """
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import logging
 import asyncio
 from threading import Thread
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.config.from_object(Config)
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24시간
 
 # Initialize trader (will use actual Predict client later)
 trader = Trader(predict_client=None)  # TODO: Initialize with Predict SDK
@@ -31,6 +32,49 @@ trader = Trader(predict_client=None)  # TODO: Initialize with Predict SDK
 # Share trader instance with auto_trader (auto_trader imports from core.trader)
 import core.trader as trader_module
 trader_module.trader = trader
+
+# 접속 암호 (하드코딩)
+ACCESS_PASSWORD = 'ansckdrhk13!'
+
+
+@app.before_request
+def require_login():
+    """로그인되지 않은 사용자는 접속 페이지로 리다이렉트"""
+    if request.endpoint in (None, 'static'):
+        return
+    if request.endpoint == 'login' or request.path == url_for('login'):
+        return
+    if request.endpoint == 'check_password' or request.path == url_for('check_password'):
+        return
+    if not session.get('authenticated'):
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'error': 'Unauthorized', 'redirect': url_for('login')}), 401
+        return redirect(url_for('login'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """접속 페이지 - 암호 입력"""
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password == ACCESS_PASSWORD:
+            session['authenticated'] = True
+            session.permanent = True
+            return redirect(url_for('index'))
+        return render_template('login.html', error='암호가 올바르지 않습니다.')
+    return render_template('login.html')
+
+
+@app.route('/login/check', methods=['POST'])
+def check_password():
+    """API용 암호 확인 (JSON)"""
+    data = request.get_json() or {}
+    password = data.get('password', '')
+    if password == ACCESS_PASSWORD:
+        session['authenticated'] = True
+        session.permanent = True
+        return jsonify({'success': True, 'redirect': url_for('index')})
+    return jsonify({'success': False, 'error': 'Invalid password'}), 401
 
 
 @app.route('/')
@@ -224,11 +268,11 @@ def execute_trade():
                 'error': 'Invalid market'
             }), 400
         
-        # Validate conditions
+        # Validate conditions (skip 5-min check for manual trade)
         is_valid, auto_direction, reason = trade_validator.validate_market({
             'end_time': market.end_time,
             'start_price': market.start_price
-        })
+        }, skip_time_check=True)
         
         if not is_valid:
             return jsonify({
