@@ -17,6 +17,9 @@ instance/
 .env
 .env.local
 
+# Runtime account data (contains PK)
+data/
+
 # IDE
 .vscode/
 .idea/

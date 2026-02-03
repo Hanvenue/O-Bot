@@ -90,9 +90,12 @@
 
         <!-- Accounts Section -->
         <section class="accounts">
-            <h3>계정 관리 (<span id="accountCount">0</span>/100)</h3>
+            <h3>계정 관리 (<span id="accountCount">0</span>/3)</h3>
             <div class="accounts-list" id="accountsList">
                 <div class="loading">계정 로딩 중...</div>
+            </div>
+            <div class="accounts-actions">
+                <button type="button" class="btn btn-secondary" id="addAccountBtn">+ 계정 추가</button>
             </div>
         </section>
 
@@ -103,6 +106,37 @@
                 <p class="empty-state">거래 내역이 없습니다</p>
             </div>
         </section>
+    </div>
+
+    <!-- 계정 추가 모달 -->
+    <div id="addAccountModal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h4>계정 추가 (OKX Wallet PK)</h4>
+            <p class="modal-hint">슬롯을 선택하고 Private Key와 프록시를 입력하세요. 계정당 다른 IP(프록시)가 필요합니다.</p>
+            <form id="addAccountForm">
+                <div class="control-group">
+                    <label>슬롯</label>
+                    <select id="addAccountSlot" required>
+                        <option value="1">계정 1</option>
+                        <option value="2">계정 2</option>
+                        <option value="3">계정 3</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Private Key (OKX Wallet)</label>
+                    <input type="password" id="addAccountPK" placeholder="0x..." required autocomplete="off">
+                </div>
+                <div class="control-group">
+                    <label>프록시 (IP:PORT:USER:PASS)</label>
+                    <input type="text" id="addAccountProxy" placeholder="64.137.95.154:6637:user:pass" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="addAccountCancel">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- 좌측 하단 플로팅 리프레시 버튼 -->

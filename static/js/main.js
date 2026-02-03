@@ -33,6 +33,9 @@ class GyeongBot {
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => this.refresh());
         }
+        document.getElementById('addAccountCancel')?.addEventListener('click', () => this.closeAddAccountModal());
+        document.querySelector('#addAccountModal .modal-overlay')?.addEventListener('click', () => this.closeAddAccountModal());
+        document.getElementById('addAccountForm')?.addEventListener('submit', (e) => this.submitAddAccount(e));
         document.getElementById('sharesInput').addEventListener('input', () => {
             this.updateTradeEstimate();
             clearTimeout(this._sharesDebounce);
@@ -192,9 +195,11 @@ class GyeongBot {
     
     renderAccounts() {
         const list = document.getElementById('accountsList');
+        const addBtn = document.getElementById('addAccountBtn');
+        if (addBtn) addBtn.onclick = () => this.openAddAccountModal();
         
         if (this.accounts.length === 0) {
-            list.innerHTML = '<p class="empty-state">계정이 없습니다</p>';
+            list.innerHTML = '<p class="empty-state">계정이 없습니다. "+ 계정 추가"로 PK와 프록시를 입력하세요.</p>';
             return;
         }
         
@@ -211,6 +216,52 @@ class GyeongBot {
                 </div>
             </div>
         `).join('');
+    }
+    
+    openAddAccountModal() {
+        if (this.accounts.length >= 3) {
+            this.showStatus('프록시를 추가해 주세요. 계정은 최대 3개까지 가능합니다.', 'error');
+            return;
+        }
+        const modal = document.getElementById('addAccountModal');
+        const form = document.getElementById('addAccountForm');
+        if (modal && form) {
+            form.reset();
+            modal.style.display = 'flex';
+        }
+    }
+    
+    closeAddAccountModal() {
+        const modal = document.getElementById('addAccountModal');
+        if (modal) modal.style.display = 'none';
+    }
+    
+    async submitAddAccount(e) {
+        e.preventDefault();
+        const slot = parseInt(document.getElementById('addAccountSlot')?.value) || 1;
+        const pk = (document.getElementById('addAccountPK')?.value || '').trim();
+        const proxy = (document.getElementById('addAccountProxy')?.value || '').trim();
+        if (!pk || !proxy) {
+            this.showStatus('PK와 프록시를 모두 입력하세요.', 'error');
+            return;
+        }
+        try {
+            const res = await fetchWithAuth('/api/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot, private_key: pk, proxy })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.closeAddAccountModal();
+                this.showStatus('계정이 추가되었습니다.', 'success');
+                this.loadAccounts();
+            } else {
+                this.showStatus(data.error || '계정 추가 실패', 'error');
+            }
+        } catch (err) {
+            this.showStatus('오류: ' + err.message, 'error');
+        }
     }
     
     updateTradeEstimate() {

@@ -1,12 +1,15 @@
 """
 Account Management Module - Handle multiple OKX Wallet accounts with proxies
 """
+import json
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional
 from eth_account import Account as EthAccount
 from config import Config
 
 logger = logging.getLogger(__name__)
+ACCOUNTS_JSON = Path(__file__).resolve().parent.parent / 'data' / 'accounts.json'
 
 
 class Account:
@@ -60,10 +63,12 @@ class Account:
     def to_dict(self):
         """Convert account to dictionary for API response"""
         proxy_ip = self.proxy.split(':')[0] if self.proxy else 'N/A'
+        nickname = self.username or (self.address[:6] + '...' + self.address[-4:] if self.address else 'N/A')
         return {
             'id': self.id,
             'address': self.address,
             'username': self.username,
+            'nickname': nickname,
             'balance': self.balance,
             'unclaimed': self.unclaimed,
             'proxy_ip': proxy_ip,
@@ -79,7 +84,18 @@ class AccountManager:
         self._load_accounts()
     
     def _load_accounts(self):
-        """Load accounts from config"""
+        """Load from data/accounts.json or Config (env)"""
+        if ACCOUNTS_JSON.exists():
+            try:
+                with open(ACCOUNTS_JSON) as f:
+                    data = json.load(f)
+                    for item in data.get('accounts', []):
+                        self._load_one(item)
+                    if self.accounts:
+                        logger.info(f"✅ Loaded {len(self.accounts)} accounts from JSON")
+                        return
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load {ACCOUNTS_JSON}: {e}")
         for account_config in Config.ACCOUNTS:
             try:
                 pk = account_config.get('private_key')
@@ -100,6 +116,37 @@ class AccountManager:
                 logger.error(f"❌ Failed to load account {account_config.get('id', '?')}: {e}")
         
         logger.info(f"✅ Loaded {len(self.accounts)} accounts")
+    
+    def _load_one(self, item: dict):
+        try:
+            pk = (item.get('private_key') or '').strip()
+            proxy = (item.get('proxy') or '').strip()
+            if not pk or not proxy:
+                return
+            acc = Account(account_id=int(item.get('id', 0)), private_key=pk, proxy=proxy)
+            acc.username = item.get('username') or item.get('nickname')
+            self.accounts.append(acc)
+        except Exception as e:
+            logger.error(f"❌ Failed to load account {item.get('id')}: {e}")
+    
+    def upsert_account(self, slot: int, private_key: str, proxy: str):
+        """Add or update account. Persists to data/accounts.json."""
+        if slot < 1 or slot > 3:
+            raise ValueError("Slot must be 1, 2, or 3")
+        if not private_key or not proxy:
+            raise ValueError("private_key and proxy required")
+        existing = next((a for a in self.accounts if a.id == slot), None)
+        if existing:
+            self.accounts.remove(existing)
+        acc = Account(account_id=slot, private_key=private_key, proxy=proxy)
+        self.accounts.append(acc)
+        self.accounts.sort(key=lambda a: a.id)
+        ACCOUNTS_JSON.parent.mkdir(parents=True, exist_ok=True)
+        with open(ACCOUNTS_JSON, 'w') as f:
+            json.dump({
+                'accounts': [{'id': a.id, 'private_key': a.private_key, 'proxy': a.proxy, 'username': getattr(a, 'username', None)} for a in self.accounts]
+            }, f, indent=2)
+        logger.info(f"✅ Account {slot} saved")
     
     def get_account(self, account_id: int) -> Optional[Account]:
         """Get account by ID"""

@@ -101,6 +101,37 @@ def get_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+MAX_ACCOUNTS = 3
+
+
+@app.route('/api/accounts', methods=['GET', 'POST'])
+def manage_accounts():
+    """계정 추가/수정. POST: { slot: 1|2|3, private_key, proxy }"""
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        slot = data.get('slot', 1)
+        pk = (data.get('private_key') or '').strip()
+        proxy = (data.get('proxy') or '').strip()
+        try:
+            slot = int(slot)
+        except (TypeError, ValueError):
+            slot = 1
+        if slot < 1 or slot > MAX_ACCOUNTS:
+            return jsonify({'success': False, 'error': '프록시를 추가해 주세요. 계정은 최대 3개까지 가능합니다.'}), 400
+        current = account_manager.to_list()
+        if len(current) >= MAX_ACCOUNTS and not any(a.get('id') == slot for a in current):
+            return jsonify({'success': False, 'error': '프록시를 추가해 주세요. 계정은 최대 3개까지 가능합니다.'}), 400
+        try:
+            account_manager.upsert_account(slot, pk, proxy)
+            return jsonify({'success': True})
+        except ValueError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        except Exception as e:
+            logger.error(f"❌ Account save error: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    return jsonify({'success': True, 'accounts': account_manager.to_list(), 'max_accounts': MAX_ACCOUNTS})
+
+
 @app.route('/api/market/current')
 def get_current_market():
     """Get current active market with optional strategy preview"""
