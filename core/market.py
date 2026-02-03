@@ -10,6 +10,13 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_api_key(key: Optional[str]) -> str:
+    """Strip invisible Unicode (e.g. U+2068) from API key to avoid latin-1 encode errors."""
+    if not key:
+        return ''
+    return ''.join(c for c in str(key).strip() if ord(c) < 128 and (c.isalnum() or c in '-'))
+
+
 class Market:
     """Single market representation"""
     
@@ -79,7 +86,7 @@ class MarketService:
         """
         try:
             headers = {
-                'x-api-key': self.api_key or ''
+                'x-api-key': _sanitize_api_key(self.api_key)
             }
             base = self.base_url.rstrip('/')
             raw_list = []
@@ -178,7 +185,7 @@ class MarketService:
         """Get orderbook for a market (Predict.fun REST API)"""
         try:
             headers = {
-                'x-api-key': self.api_key or ''
+                'x-api-key': _sanitize_api_key(self.api_key)
             }
             
             url = f"{self.base_url.rstrip('/')}/v1/markets/{market_id}/orderbook"
