@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>접속 - 경봇</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 360px;
+        }
+        .login-box h1 {
+            margin-bottom: 8px;
+            color: #333;
+        }
+        .login-box p {
+            color: #666;
+            margin-bottom: 24px;
+        }
+        .login-box input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        .login-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .login-box button:hover {
+            background: #5568d3;
+        }
+        .login-error {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-box">
+            <h1>🔐 접속</h1>
+            <p>암호를 입력하세요</p>
+            {% if error %}
+            <p class="login-error">{{ error }}</p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('login') }}">
+                <input type="password" name="password" placeholder="암호" required autofocus>
+                <button type="submit">접속</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
