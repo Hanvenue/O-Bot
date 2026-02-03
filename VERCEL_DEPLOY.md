@@ -64,11 +64,12 @@ vercel
 
 ### 4. 환경 변수 설정 (필수)
 
-Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variables**에서 아래를 모두 등록하세요.
+Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variables**에서 아래를 등록하세요.
 
+**Predict.fun API (필수)**  
 | 변수명 | 설명 |
 |--------|------|
-| `PREDICT_API_KEY` | Predict.fun API 키 |
+| `PREDICT_API_KEY` | Predict.fun API 키 (Discord에서 발급) |
 | `PREDICT_BASE_URL` | `https://api.predict.fun` (기본값) |
 | `ACCOUNT_1_PK` | 계정 1 프라이빗 키 |
 | `ACCOUNT_2_PK` | 계정 2 프라이빗 키 |
