@@ -107,7 +107,11 @@ class MarketService:
             
             for cat in categories:
                 cat_variant = cat.get('variantData') or {}
-                cat_start = cat_variant.get('startPrice') or 0.0
+                cat_start = cat_variant.get('startPrice') or cat.get('startPrice') or 0.0
+                try:
+                    cat_start = float(cat_start) if cat_start else 0.0
+                except (TypeError, ValueError):
+                    cat_start = 0.0
                 for m in cat.get('markets', []):
                     m['_startsAt'] = cat.get('startsAt')
                     m['_endsAt'] = cat.get('endsAt')
@@ -188,9 +192,37 @@ class MarketService:
         # Get the one ending soonest
         current = min(active_markets, key=lambda m: m.time_remaining())
         
+        # If start_price is 0, API may not include it in categories - fetch full market
+        if current.start_price == 0 and current.id is not None:
+            full = self._fetch_market_by_id(current.id)
+            if full:
+                v = full.get('variantData') or {}
+                sp = v.get('startPrice')
+                try:
+                    sp_val = float(sp) if sp is not None else 0
+                    if sp_val > 0:
+                        current.start_price = sp_val
+                        current.current_price = sp_val
+                        logger.info(f"✅ Enriched start_price from /v1/markets/{current.id}: ${current.start_price:,.2f}")
+                except (TypeError, ValueError):
+                    pass
+        
         logger.info(f"✅ Current market: {current.title} (ends in {current.time_remaining()}s)")
         
         return current
+    
+    def _fetch_market_by_id(self, market_id: int) -> Optional[dict]:
+        """Fetch full market details. Used when startPrice is missing from categories."""
+        try:
+            headers = {'x-api-key': _sanitize_api_key(self.api_key)}
+            url = f"{self.base_url.rstrip('/')}/v1/markets/{market_id}"
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.ok:
+                data = resp.json()
+                return data.get('data') if data.get('success') else None
+        except Exception as e:
+            logger.debug(f"Could not fetch market {market_id}: {e}")
+        return None
     
     def get_orderbook(self, market_id: int) -> dict:
         """Get orderbook for a market (Predict.fun REST API)"""
