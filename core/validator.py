@@ -98,9 +98,15 @@ class TradeValidator:
                     val = level.get('price') or level.get('size') or level.get('amount')
                     return float(val) if val is not None else None
                 return None
+
+            def _sort_by_price(levels, ascending=True):
+                """가격 기준 정렬 (API 정렬 미보장 대비)"""
+                valid = [(l, _extract_price(l)) for l in levels if _extract_price(l) is not None]
+                valid.sort(key=lambda x: x[1], reverse=not ascending)
+                return [l for l, _ in valid]
             
             if direction == "UP":
-                asks = orderbook.get('asks', [])
+                asks = _sort_by_price(orderbook.get('asks', []), ascending=True)
                 if not asks:
                     return False, None
                 best_ask = _extract_price(asks[0])
@@ -109,7 +115,7 @@ class TradeValidator:
                 optimal_price = max(0.01, best_ask - 0.01)
                 logger.info(f"📊 UP - Best Ask: ${best_ask:.2f} → Maker: ${optimal_price:.2f}")
             else:  # DOWN
-                bids = orderbook.get('bids', [])
+                bids = _sort_by_price(orderbook.get('bids', []), ascending=False)
                 if not bids:
                     return False, None
                 best_bid = _extract_price(bids[0])

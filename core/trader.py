@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Optional
 from core.account import Account
-from core.predict_order import submit_order
+from core.predict_order import submit_order, cancel_orders
 
 logger = logging.getLogger(__name__)
 
@@ -126,9 +126,15 @@ class Trader:
         )
     
     def _cancel_order(self, account: Account, order_hash: str):
-        """Cancel order - TODO: Remove orders API는 계정별 JWT 필요"""
+        """Remove order from orderbook (계정 JWT 사용)"""
+        if not order_hash:
+            return
         try:
-            logger.warning(f"⚠️ Cancel not implemented for {order_hash} - JWT per account required")
+            result = cancel_orders(account, [order_hash])
+            if result.get('success'):
+                logger.info(f"✅ Order removed: {order_hash}")
+            else:
+                logger.warning(f"⚠️ Cancel failed for {order_hash}: {result.get('error')}")
         except Exception as e:
             logger.error(f"❌ Cancel error: {e}")
 

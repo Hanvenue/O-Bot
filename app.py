@@ -344,12 +344,13 @@ def execute_trade():
                 'error': 'Orderbook validation failed'
             }), 400
         
-        # Check balance
-        if not account_manager.can_afford_trade(shares, maker_price):
-            return jsonify({
-                'success': False,
-                'error': 'Insufficient balance'
-            }), 400
+        # Check balance (잔액 API 없음 - total 0이면 스킵, 실제 거래 시 Predict에서 거절)
+        if account_manager.get_total_balance() > 0:
+            if not account_manager.can_afford_trade(shares, maker_price):
+                return jsonify({
+                    'success': False,
+                    'error': 'Insufficient balance'
+                }), 400
         
         # Assign accounts (need at least 2 for wash trade)
         maker_account = account_manager.get_account_with_lowest_balance()

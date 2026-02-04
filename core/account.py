@@ -167,21 +167,10 @@ class AccountManager:
         return self.accounts
     
     def get_account_with_lowest_balance(self) -> Optional[Account]:
-        """
-        Get account with lowest balance
-        This account should be Maker (to win and increase balance)
-        """
+        """잔액 최소 계정 (Maker = 승리 시 수수료 없음). 잔액 0이면 (balance, id) 순 첫 번째."""
         if not self.accounts:
             return None
-        
-        # Filter accounts with balance < MIN_BALANCE
-        low_balance_accounts = [a for a in self.accounts if a.balance < Config.MIN_BALANCE]
-        
-        if low_balance_accounts:
-            return min(low_balance_accounts, key=lambda a: a.balance)
-        
-        # If all accounts have sufficient balance, return None (random assignment)
-        return None
+        return min(self.accounts, key=lambda a: (a.balance, a.id))
     
     def get_total_balance(self) -> float:
         """Get total balance across all accounts"""

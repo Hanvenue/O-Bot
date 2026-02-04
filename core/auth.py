@@ -113,3 +113,34 @@ def get_predict_account_for_account(account: Account, api_key: Optional[str] = N
     if not data:
         return {'success': False, 'error': 'Predict 계정 조회 실패'}
     return {'success': True, 'data': data}
+
+
+def remove_orders(account: Account, order_ids: List[str], api_key: Optional[str] = None) -> dict:
+    """POST /v1/orders/remove - 오더북에서 주문 제거 (JWT 필요)"""
+    if not order_ids:
+        return {'success': True, 'removed': [], 'noop': []}
+    jwt_token = get_jwt_for_account(account, api_key)
+    if not jwt_token:
+        return {'success': False, 'error': 'Failed to obtain JWT', 'removed': [], 'noop': []}
+    api_key = _sanitize_api_key(api_key or Config.PREDICT_API_KEY)
+    url = f"{_base_url()}/v1/orders/remove"
+    headers = {'x-api-key': api_key, 'Authorization': f'Bearer {jwt_token}', 'Content-Type': 'application/json'}
+    payload = {'data': {'ids': order_ids}}
+    proxies = None
+    if getattr(account, 'proxy', None) and ':' in str(account.proxy):
+        try:
+            proxies = account.get_proxy_dict()
+        except (ValueError, AttributeError):
+            pass
+    try:
+        r = requests.post(url, json=payload, headers=headers, proxies=proxies, timeout=15)
+        body = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+        if r.ok:
+            return {'success': True, 'removed': body.get('removed', []), 'noop': body.get('noop', [])}
+        if r.status_code == 401 and account.id in _JWT_CACHE:
+            del _JWT_CACHE[account.id]
+            return remove_orders(account, order_ids, api_key)
+        return {'success': False, 'error': body.get('error') or body.get('message') or r.text[:200], 'removed': [], 'noop': []}
+    except Exception as e:
+        logger.exception("remove_orders error")
+        return {'success': False, 'error': str(e), 'removed': [], 'noop': []}

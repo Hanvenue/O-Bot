@@ -24,12 +24,14 @@ def _sanitize_api_key(key):
 
 
 def _get_market_trading_info(market_id: int) -> Optional[dict]:
-    """Fetch full market for token_id, fee_rate_bps. YES=indexSet1, NO=indexSet2."""
+    """Fetch full market for token_id, fee_rate_bps, is_neg_risk, is_yield_bearing."""
     full = market_service._fetch_market_by_id(market_id)
     if not full:
         return None
     outcomes = full.get('outcomes') or []
     fee_bps = full.get('feeRateBps', 0) or 0
+    is_neg_risk = bool(full.get('isNegRisk', False))
+    is_yield_bearing = bool(full.get('isYieldBearing', False))
     token_ids = {}
     for i, o in enumerate(outcomes):
         idx = o.get('indexSet', i + 1)
@@ -43,7 +45,12 @@ def _get_market_trading_info(market_id: int) -> Optional[dict]:
         token_ids = {i + 1: str(o.get('id', i + 1)) for i, o in enumerate(outcomes) if o.get('id') is not None}
     if not token_ids:
         logger.warning(f"Market {market_id}: no token_ids in outcomes")
-    return {'token_ids': token_ids, 'fee_rate_bps': int(fee_bps)}
+    return {
+        'token_ids': token_ids,
+        'fee_rate_bps': int(fee_bps),
+        'is_neg_risk': is_neg_risk,
+        'is_yield_bearing': is_yield_bearing,
+    }
 
 
 def _price_to_wei(price: float) -> int:
@@ -88,6 +95,8 @@ def submit_order(
         return {'success': False, 'error': f'Market {market_id} trading info not found'}
     token_ids = info['token_ids']
     fee_bps = info['fee_rate_bps'] or 100
+    is_neg_risk = info.get('is_neg_risk', False)
+    is_yield_bearing = info.get('is_yield_bearing', False)
 
     # UP=YES=indexSet 1, DOWN=NO=indexSet 2
     token_id = token_ids.get(1) if side.upper() == 'UP' else token_ids.get(2)
@@ -115,7 +124,7 @@ def submit_order(
                 fee_rate_bps=fee_bps,
             ),
         )
-        typed_data = builder.build_typed_data(order, is_neg_risk=False, is_yield_bearing=False)
+        typed_data = builder.build_typed_data(order, is_neg_risk=is_neg_risk, is_yield_bearing=is_yield_bearing)
         order_hash = builder.build_typed_data_hash(typed_data)
         signed = builder.sign_typed_data_order(typed_data)
 
@@ -148,7 +157,12 @@ def submit_order(
         }
 
         headers = {'x-api-key': api_key, 'Content-Type': 'application/json'}
-        proxies = account.get_proxy_dict()
+        proxies = None
+        if getattr(account, 'proxy', None) and ':' in str(account.proxy):
+            try:
+                proxies = account.get_proxy_dict()
+            except (ValueError, AttributeError):
+                pass
 
         resp = requests.post(url, json=payload, headers=headers, proxies=proxies, timeout=30)
         body = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {}
@@ -168,3 +182,10 @@ def submit_order(
     except Exception as e:
         logger.exception("Order submit error")
         return {'success': False, 'error': str(e)}
+
+
+def cancel_orders(account: Account, order_ids: list, api_key: Optional[str] = None) -> dict:
+    """Remove orders from orderbook (계정 JWT 사용)"""
+    from core.auth import remove_orders as auth_remove
+    order_ids = [str(o).strip() for o in order_ids if o]
+    return auth_remove(account, order_ids, api_key)
