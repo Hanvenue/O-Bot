@@ -226,10 +226,16 @@ class GyeongBot {
             btn.disabled = true;
             btn.textContent = '승인 중...';
         }
+        let approved = false;
         try {
             const res = await fetchWithAuth(`/api/accounts/${accountId}/approve`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
+                approved = true;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '승인 완료';
+                }
                 this.showStatus(data.message || 'USDT 승인 완료', 'success');
             } else {
                 this.showStatus(data.error || '승인 실패', 'error');
@@ -237,7 +243,7 @@ class GyeongBot {
         } catch (e) {
             this.showStatus('승인 요청 실패', 'error');
         } finally {
-            if (btn) {
+            if (btn && !approved) {
                 btn.disabled = false;
                 btn.textContent = 'USDT 승인';
             }
