@@ -145,6 +145,23 @@ def manage_accounts():
     return jsonify({'success': True, 'accounts': account_manager.to_list(), 'max_accounts': MAX_ACCOUNTS})
 
 
+@app.route('/api/accounts/<int:account_id>/approve', methods=['POST'])
+def approve_account(account_id):
+    """EOA용 USDT 승인 (온체인 트랜잭션, 가스비 BNB 필요)"""
+    try:
+        account = account_manager.get_account(account_id)
+        if not account:
+            return jsonify({'success': False, 'error': '계정을 찾을 수 없습니다'}), 404
+        from core.approve import run_approve
+        result = run_approve(account)
+        if result.get('success'):
+            return jsonify(result)
+        return jsonify(result), 400
+    except Exception as e:
+        logger.error(f"❌ Approve error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/market/current')
 def get_current_market():
     """Get current active market with optional strategy preview"""

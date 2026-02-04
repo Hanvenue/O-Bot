@@ -212,8 +212,36 @@ class GyeongBot {
                 <div class="account-status ${account.is_logged_in ? 'status-active' : 'status-inactive'}">
                     ${account.is_logged_in ? 'Active' : 'Inactive'}
                 </div>
+                <button type="button" class="btn btn-approve" data-account-id="${account.id}" title="EOA 거래용 USDT 승인 (가스비 BNB 필요)">USDT 승인</button>
             </div>
         `}).join('');
+        list.querySelectorAll('.btn-approve').forEach(btn => {
+            btn.addEventListener('click', (e) => this.onApprove(e.currentTarget.dataset.accountId));
+        });
+    }
+
+    async onApprove(accountId) {
+        const btn = document.querySelector(`.btn-approve[data-account-id="${accountId}"]`);
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '승인 중...';
+        }
+        try {
+            const res = await fetchWithAuth(`/api/accounts/${accountId}/approve`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                this.showStatus(data.message || 'USDT 승인 완료', 'success');
+            } else {
+                this.showStatus(data.error || '승인 실패', 'error');
+            }
+        } catch (e) {
+            this.showStatus('승인 요청 실패', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'USDT 승인';
+            }
+        }
     }
     
     openAddAccountModal() {
