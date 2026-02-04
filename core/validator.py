@@ -13,19 +13,17 @@ class TradeValidator:
     """Validate trade conditions before execution"""
     
     @staticmethod
-    def validate_market(market_data: dict, skip_time_check: bool = False) -> tuple[bool, str, str]:
+    def validate_market(market_data: dict, skip_time_check: bool = False, skip_gap_check: bool = False) -> tuple[bool, str, str]:
         """
         Validate if market meets trade conditions
         
         Args:
             market_data: Market information from Predict.fun
             skip_time_check: If True, skip 5-min-before-end check (for manual trade)
+            skip_gap_check: If True, skip MIN_PRICE_GAP check (for manual trade)
             
         Returns:
             tuple: (is_valid, direction, reason)
-                - is_valid: True if should trade
-                - direction: "UP" or "DOWN"
-                - reason: Explanation
         """
         try:
             # 1. Check market end time
@@ -60,12 +58,13 @@ class TradeValidator:
             
             price_gap = btc_price_service.get_price_gap(start_price)
             
-            # 3. Check price gap (±$200)
-            if abs(price_gap) < Config.MIN_PRICE_GAP:
+            # 3. Check price gap (±$200) - 수동 거래 시 스킵
+            if not skip_gap_check and abs(price_gap) < Config.MIN_PRICE_GAP:
                 return False, None, f"Gap insufficient: ${price_gap:+,.2f} (need ±${Config.MIN_PRICE_GAP})"
             
             # 4. Determine direction
-            if price_gap >= Config.MIN_PRICE_GAP:
+            threshold = Config.MIN_PRICE_GAP if not skip_gap_check else 0
+            if price_gap >= threshold:
                 direction = "UP"
                 logger.info(f"✅ Trade condition met: UP (+${price_gap:,.2f})")
             else:

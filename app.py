@@ -161,11 +161,11 @@ def get_current_market():
         current_btc = btc_price_service.get_current_price()
         gap = current_btc - market.start_price
         
-        # Check if trade ready (수동 거래: 5분 제한 없음. Auto는 auto_trader에서 별도 검사)
+        # Check if trade ready (수동 거래: 5분·갭 제한 없음. Auto는 auto_trader에서 별도 검사)
         is_valid, direction, reason = trade_validator.validate_market({
             'end_time': market.end_time,
             'start_price': market.start_price
-        }, skip_time_check=True)
+        }, skip_time_check=True, skip_gap_check=True)
         
         market_data = market.to_dict()
         market_data['current_btc_price'] = current_btc
@@ -319,11 +319,11 @@ def execute_trade():
                 'error': 'Invalid market'
             }), 400
         
-        # Validate conditions (skip 5-min check for manual trade)
+        # Validate conditions (수동 거래: 5분·갭 제한 없음)
         is_valid, auto_direction, reason = trade_validator.validate_market({
             'end_time': market.end_time,
             'start_price': market.start_price
-        }, skip_time_check=True)
+        }, skip_time_check=True, skip_gap_check=True)
         
         if not is_valid:
             return jsonify({
