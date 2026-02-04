@@ -209,7 +209,6 @@ class GyeongBot {
                     <div class="account-address">${account.address ? account.address.substring(0, 10) + '...' : 'N/A'}</div>
                     <div>${name}${pts}</div>
                 </div>
-                <div class="account-balance">$${account.balance.toFixed(2)}</div>
                 <div class="account-status ${account.is_logged_in ? 'status-active' : 'status-inactive'}">
                     ${account.is_logged_in ? 'Active' : 'Inactive'}
                 </div>

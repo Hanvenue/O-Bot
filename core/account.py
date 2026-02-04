@@ -29,6 +29,7 @@ class Account:
         try:
             eth_account = EthAccount.from_key(private_key)
             self.address = eth_account.address
+            self.is_logged_in = True  # PK로 정상 로드됨 = Active
             logger.info(f"✅ Account {account_id} initialized: {self.address}")
         except Exception as e:
             logger.error(f"❌ Failed to initialize account {account_id}: {e}")

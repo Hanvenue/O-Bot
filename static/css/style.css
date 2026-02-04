@@ -263,7 +263,7 @@ section h2, section h3 {
 
 .account-card {
     display: grid;
-    grid-template-columns: 60px 1fr 120px 120px;
+    grid-template-columns: 60px 1fr 100px;
     align-items: center;
     padding: 12px;
     background: #f8f9fa;
