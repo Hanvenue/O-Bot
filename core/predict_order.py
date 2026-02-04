@@ -156,7 +156,16 @@ def submit_order(
             }
         }
 
-        headers = {'x-api-key': api_key, 'Content-Type': 'application/json'}
+        from core.auth import get_jwt_for_account
+        jwt_token = get_jwt_for_account(account, api_key)
+        if not jwt_token:
+            return {'success': False, 'error': 'JWT 발급 실패 - Predict 인증 필요'}
+
+        headers = {
+            'x-api-key': api_key,
+            'Authorization': f'Bearer {jwt_token}',
+            'Content-Type': 'application/json',
+        }
         proxies = None
         if getattr(account, 'proxy', None) and ':' in str(account.proxy):
             try:
