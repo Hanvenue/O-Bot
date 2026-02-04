@@ -113,12 +113,12 @@ class GyeongBot {
                     <value>${this.formatTime(market.time_remaining)}</value>
                 </div>
                 <div class="info-item">
-                    <label>YES 가격</label>
-                    <value>$${market.yes_price.toFixed(2)}</value>
+                    <label>YES 가격 (매수)</label>
+                    <value>${market.yes_price != null ? '$' + Number(market.yes_price).toFixed(2) : '—'}</value>
                 </div>
                 <div class="info-item">
-                    <label>NO 가격</label>
-                    <value>$${market.no_price.toFixed(2)}</value>
+                    <label>NO 가격 (매수)</label>
+                    <value>${market.no_price != null ? '$' + Number(market.no_price).toFixed(2) : '—'}</value>
                 </div>
             </div>
             <div class="${market.trade_ready ? 'trade-ready' : 'trade-not-ready'}">

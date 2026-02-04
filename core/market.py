@@ -249,6 +249,32 @@ class MarketService:
         except Exception as e:
             logger.error(f"❌ Failed to get orderbook: {e}")
             return {'bids': [], 'asks': []}
+    
+    def get_yes_no_prices_from_orderbook(self, market_id: int) -> tuple:
+        """
+        호가창에서 YES/NO 최고가(매수 기준) 추출.
+        Orderbook은 Yes 기준: asks=Yes 매도, bids=Yes 매수.
+        - YES 가격 = best ask (Yes 매수 가격)
+        - NO 가격 = 1 - best bid (No 매수 = Yes 매도이므로 1-bid)
+        """
+        ob = self.get_orderbook(market_id)
+        asks = ob.get('asks', []) or []
+        bids = ob.get('bids', []) or []
+
+        def _price(level):
+            if isinstance(level, (list, tuple)) and len(level) >= 1:
+                return float(level[0])
+            if isinstance(level, dict):
+                v = level.get('price') or level.get('amount')
+                return float(v) if v is not None else None
+            return None
+
+        best_ask = min((_price(a) for a in asks if _price(a) is not None), default=None)
+        best_bid = max((_price(b) for b in bids if _price(b) is not None), default=None)
+
+        yes_price = round(best_ask, 2) if best_ask is not None else None
+        no_price = round(1.0 - best_bid, 2) if best_bid is not None else None
+        return (yes_price, no_price)
 
 
 # Singleton

@@ -161,6 +161,13 @@ def get_current_market():
         market_data['trade_direction'] = direction
         market_data['trade_reason'] = reason
         
+        # YES/NO 실시간 가격 (호가창에서 추출)
+        yes_p, no_p = market_service.get_yes_no_prices_from_orderbook(market.id)
+        if yes_p is not None:
+            market_data['yes_price'] = yes_p
+        if no_p is not None:
+            market_data['no_price'] = no_p
+        
         # Strategy preview when trade ready (shares from query param)
         shares = request.args.get('shares', type=int, default=10)
         shares = max(1, shares) if shares else 10
