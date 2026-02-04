@@ -1,22 +1,20 @@
 """
 Trader Module - Execute wash trades (Maker-Taker strategy)
+계정별 프록시 사용하여 Predict.fun 실거래 실행
 """
 import logging
 import time
 from typing import Optional
 from core.account import Account
+from core.predict_order import submit_order
 
 logger = logging.getLogger(__name__)
 
 
 class Trader:
-    """Execute trades on Predict.fun"""
+    """Execute trades on Predict.fun (proxy per account)"""
     
-    def __init__(self, predict_client):
-        """
-        Args:
-            predict_client: Predict.fun API client (will be initialized in app.py)
-        """
+    def __init__(self, predict_client=None):
         self.client = predict_client
     
     def execute_wash_trade(
@@ -56,13 +54,13 @@ class Trader:
                 shares=shares
             )
             
-            if not maker_result['success']:
+            if not maker_result.get('success'):
                 return {
                     'success': False,
-                    'error': f"Maker order failed: {maker_result.get('error')}"
+                    'error': f"Maker order failed: {maker_result.get('error', 'Unknown')}"
                 }
             
-            logger.info(f"✅ Maker order placed: {maker_result['order_hash']}")
+            logger.info(f"✅ Maker order placed: {maker_result.get('order_hash', 'N/A')}")
             
             # Wait for order to be in orderbook
             time.sleep(2)
@@ -79,21 +77,20 @@ class Trader:
                 shares=shares
             )
             
-            if not taker_result['success']:
-                # Try to cancel Maker order
-                self._cancel_order(maker_account, maker_result['order_hash'])
+            if not taker_result.get('success'):
+                self._cancel_order(maker_account, maker_result.get('order_hash', ''))
                 return {
                     'success': False,
                     'error': f"Taker order failed: {taker_result.get('error')}"
                 }
             
-            logger.info(f"✅ Taker order placed: {taker_result['order_hash']}")
+            logger.info(f"✅ Taker order placed: {taker_result.get('order_hash', 'N/A')}")
             
             # Success
             return {
                 'success': True,
-                'maker_order': maker_result['order_hash'],
-                'taker_order': taker_result['order_hash'],
+                'maker_order': maker_result.get('order_hash'),
+                'taker_order': taker_result.get('order_hash'),
                 'direction': direction,
                 'price': maker_price,
                 'shares': shares
@@ -107,62 +104,31 @@ class Trader:
             }
     
     def _place_maker_order(self, market_id: int, account: Account, side: str, price: float, shares: int) -> dict:
-        """Place Maker (limit) order"""
-        try:
-            # TODO: Implement with Predict.fun SDK
-            # This is a placeholder - actual implementation will use predict-sdk
-            
-            order_data = {
-                'market_id': market_id,
-                'side': side,
-                'type': 'LIMIT',
-                'price': price,
-                'shares': shares,
-                'account': account.address,
-                'private_key': account.private_key
-            }
-            
-            # Placeholder response
-            return {
-                'success': True,
-                'order_hash': f"0x{account.id}maker{int(time.time())}"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Maker order error: {e}")
-            return {'success': False, 'error': str(e)}
+        """Place Maker (limit) order - 계정 프록시 사용"""
+        return submit_order(
+            account=account,
+            market_id=market_id,
+            side=side,
+            price_per_share=price,
+            shares=shares,
+            strategy='LIMIT',
+        )
     
     def _place_taker_order(self, market_id: int, account: Account, side: str, price: float, shares: int) -> dict:
-        """Place Taker (market) order"""
-        try:
-            # TODO: Implement with Predict.fun SDK
-            
-            order_data = {
-                'market_id': market_id,
-                'side': side,
-                'type': 'MARKET',
-                'price': price,
-                'shares': shares,
-                'account': account.address,
-                'private_key': account.private_key
-            }
-            
-            # Placeholder response
-            return {
-                'success': True,
-                'order_hash': f"0x{account.id}taker{int(time.time())}"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Taker order error: {e}")
-            return {'success': False, 'error': str(e)}
+        """Place Taker (limit) order - 계정 프록시 사용. Taker는 반대편 호가에 매칭."""
+        return submit_order(
+            account=account,
+            market_id=market_id,
+            side=side,
+            price_per_share=price,
+            shares=shares,
+            strategy='LIMIT',
+        )
     
     def _cancel_order(self, account: Account, order_hash: str):
-        """Cancel order"""
+        """Cancel order - TODO: Remove orders API는 계정별 JWT 필요"""
         try:
-            logger.warning(f"⚠️ Cancelling order: {order_hash}")
-            # TODO: Implement cancel
-            pass
+            logger.warning(f"⚠️ Cancel not implemented for {order_hash} - JWT per account required")
         except Exception as e:
             logger.error(f"❌ Cancel error: {e}")
 
