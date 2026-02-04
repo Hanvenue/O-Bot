@@ -127,6 +127,13 @@ def submit_order(
         typed_data = builder.build_typed_data(order, is_neg_risk=is_neg_risk, is_yield_bearing=is_yield_bearing)
         order_hash = builder.build_typed_data_hash(typed_data)
         signed = builder.sign_typed_data_order(typed_data)
+        raw = signed.signature
+        if hasattr(raw, 'hex'):
+            sig = '0x' + raw.hex()
+        else:
+            sig = str(raw or '')
+            if sig and not sig.startswith('0x'):
+                sig = '0x' + sig
 
         api_key = api_key or Config.PREDICT_API_KEY
         api_key = _sanitize_api_key(api_key)
@@ -151,7 +158,7 @@ def submit_order(
                     'feeRateBps': str(signed.fee_rate_bps),
                     'side': int(signed.side),
                     'signatureType': int(signed.signature_type),
-                    'signature': signed.signature,
+                    'signature': sig,
                 },
             }
         }
