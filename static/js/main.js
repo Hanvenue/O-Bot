@@ -199,19 +199,22 @@ class GyeongBot {
             return;
         }
         
-        list.innerHTML = this.accounts.map(account => `
+        list.innerHTML = this.accounts.map(account => {
+            const name = account.predict_name || account.nickname || account.username || (account.address ? account.address.substring(0, 10) + '...' : 'N/A');
+            const pts = account.predict_points != null ? ` · ${account.predict_points} pts` : '';
+            return `
             <div class="account-card">
                 <div class="account-id">#${account.id}</div>
                 <div class="account-info">
                     <div class="account-address">${account.address ? account.address.substring(0, 10) + '...' : 'N/A'}</div>
-                    <div>${account.username || 'Unknown'}</div>
+                    <div>${name}${pts}</div>
                 </div>
                 <div class="account-balance">$${account.balance.toFixed(2)}</div>
                 <div class="account-status ${account.is_logged_in ? 'status-active' : 'status-inactive'}">
                     ${account.is_logged_in ? 'Active' : 'Inactive'}
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     }
     
     openAddAccountModal() {

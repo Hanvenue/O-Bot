@@ -85,9 +85,23 @@ def index():
 
 @app.route('/api/status')
 def get_status():
-    """Get system status"""
+    """Get system status. Predict 계정 name/points 자동 조회."""
     try:
-        accounts = account_manager.to_list()
+        accounts = []
+        for acc in account_manager.get_all_accounts():
+            d = acc.to_dict()
+            try:
+                from core.auth import get_predict_account_for_account
+                result = get_predict_account_for_account(acc)
+                if result.get('success') and result.get('data'):
+                    pd = result['data']
+                    d['predict_name'] = pd.get('name') or pd.get('address', '')[:10] + '...'
+                    d['predict_points'] = (pd.get('points') or {}).get('total', 0)
+                    if d['predict_name'] and not d.get('username'):
+                        d['nickname'] = d['predict_name']
+            except Exception:
+                pass
+            accounts.append(d)
         total_balance = account_manager.get_total_balance()
         
         return jsonify({
