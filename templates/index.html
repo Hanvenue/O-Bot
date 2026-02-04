@@ -113,7 +113,7 @@
         <div class="modal-overlay"></div>
         <div class="modal-content">
             <h4>계정 추가 (OKX Wallet PK)</h4>
-            <p class="modal-hint">슬롯을 선택하고 Private Key와 프록시를 입력하세요. 계정당 다른 IP(프록시)가 필요합니다.</p>
+            <p class="modal-hint">슬롯을 선택하고 Private Key만 입력하세요. 프록시는 서버 .env(PROXY_1~3)에서 슬롯별 자동 할당됩니다.</p>
             <form id="addAccountForm">
                 <div class="control-group">
                     <label>슬롯</label>
@@ -126,10 +126,6 @@
                 <div class="control-group">
                     <label>Private Key (OKX Wallet)</label>
                     <input type="password" id="addAccountPK" placeholder="0x..." required autocomplete="off">
-                </div>
-                <div class="control-group">
-                    <label>프록시 (IP:PORT:USER:PASS)</label>
-                    <input type="text" id="addAccountProxy" placeholder="64.137.95.154:6637:user:pass" required>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="addAccountCancel">취소</button>

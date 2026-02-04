@@ -129,12 +129,18 @@ class AccountManager:
         except Exception as e:
             logger.error(f"❌ Failed to load account {item.get('id')}: {e}")
     
-    def upsert_account(self, slot: int, private_key: str, proxy: str):
-        """Add or update account. Persists to data/accounts.json."""
+    def upsert_account(self, slot: int, private_key: str, proxy: Optional[str] = None):
+        """Add or update account. Proxy는 Config.PROXY_POOL에서 슬롯별 자동 할당."""
         if slot < 1 or slot > 3:
             raise ValueError("Slot must be 1, 2, or 3")
-        if not private_key or not proxy:
-            raise ValueError("private_key and proxy required")
+        if not private_key:
+            raise ValueError("private_key required")
+        if proxy is None or not str(proxy).strip():
+            pool = getattr(Config, 'PROXY_POOL', None) or []
+            proxy = (pool[slot - 1] if slot <= len(pool) else None) or ''
+        proxy = str(proxy).strip()
+        if not proxy:
+            raise ValueError(f"PROXY_{slot}를 .env에 설정해 주세요.")
         existing = next((a for a in self.accounts if a.id == slot), None)
         if existing:
             self.accounts.remove(existing)

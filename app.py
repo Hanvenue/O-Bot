@@ -106,23 +106,22 @@ MAX_ACCOUNTS = 3
 
 @app.route('/api/accounts', methods=['GET', 'POST'])
 def manage_accounts():
-    """계정 추가/수정. POST: { slot: 1|2|3, private_key, proxy }"""
+    """계정 추가/수정. POST: { slot: 1|2|3, private_key } - 프록시는 config에서 자동 할당"""
     if request.method == 'POST':
         data = request.get_json() or {}
         slot = data.get('slot', 1)
         pk = (data.get('private_key') or '').strip()
-        proxy = (data.get('proxy') or '').strip()
         try:
             slot = int(slot)
         except (TypeError, ValueError):
             slot = 1
         if slot < 1 or slot > MAX_ACCOUNTS:
-            return jsonify({'success': False, 'error': '프록시를 추가해 주세요. 계정은 최대 3개까지 가능합니다.'}), 400
+            return jsonify({'success': False, 'error': '계정은 최대 3개까지 가능합니다.'}), 400
         current = account_manager.to_list()
         if len(current) >= MAX_ACCOUNTS and not any(a.get('id') == slot for a in current):
-            return jsonify({'success': False, 'error': '프록시를 추가해 주세요. 계정은 최대 3개까지 가능합니다.'}), 400
+            return jsonify({'success': False, 'error': '계정은 최대 3개까지 가능합니다.'}), 400
         try:
-            account_manager.upsert_account(slot, pk, proxy)
+            account_manager.upsert_account(slot, pk)
             return jsonify({'success': True})
         except ValueError as e:
             return jsonify({'success': False, 'error': str(e)}), 400

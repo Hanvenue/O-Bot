@@ -13,6 +13,12 @@ class Config:
     PREDICT_API_KEY = os.getenv('PREDICT_API_KEY')
     PREDICT_BASE_URL = os.getenv('PREDICT_BASE_URL', 'https://api.predict.fun')
     
+    # 프록시 풀: 계정 슬롯별 자동 할당 (.env PROXY_1, PROXY_2, PROXY_3)
+    def _p(i):
+        v = (os.getenv(f'PROXY_{i}') or '').strip()
+        return v or None
+    PROXY_POOL = [_p(1), _p(2), _p(3)]
+    
     # Accounts (3 accounts with OKX Wallet Private Keys)
     ACCOUNTS = [
         {

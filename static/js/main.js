@@ -236,16 +236,15 @@ class GyeongBot {
         e.preventDefault();
         const slot = parseInt(document.getElementById('addAccountSlot')?.value) || 1;
         const pk = (document.getElementById('addAccountPK')?.value || '').trim();
-        const proxy = (document.getElementById('addAccountProxy')?.value || '').trim();
-        if (!pk || !proxy) {
-            this.showStatus('PK와 프록시를 모두 입력하세요.', 'error');
+        if (!pk) {
+            this.showStatus('Private Key를 입력하세요.', 'error');
             return;
         }
         try {
             const res = await fetchWithAuth('/api/accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slot, private_key: pk, proxy })
+                body: JSON.stringify({ slot, private_key: pk })
             });
             const data = await res.json();
             if (data.success) {
