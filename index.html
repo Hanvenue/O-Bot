@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경봇 (Gyeong Bot) - Predict.fun 자동 거래</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🤖 경봇 (Gyeong Bot)</h1>
+            <p class="subtitle">Predict.fun BTC/USD 15분 자동거래</p>
+        </header>
+
+        <!-- Market Hero Section -->
+        <section class="hero-market" id="heroMarket">
+            <h2>📊 현재 마켓</h2>
+            <div class="market-card" id="marketCard">
+                <div class="loading">마켓 로딩 중...</div>
+            </div>
+        </section>
+
+        <!-- Trading Controls -->
+        <section class="trading-controls">
+            <h3>거래 설정</h3>
+            <div class="control-group">
+                <label for="sharesInput">Shares 수량:</label>
+                <input type="number" id="sharesInput" min="1" value="10" />
+            </div>
+            
+            <div class="trade-info" id="tradeInfo">
+                <div class="info-row">
+                    <span>예상 투자:</span>
+                    <span id="estimatedInvestment">$0.00</span>
+                </div>
+                <div class="info-row">
+                    <span>예상 수수료:</span>
+                    <span id="estimatedFee">$0.00</span>
+                </div>
+            </div>
+            
+            <!-- 거래 실행 시 어떻게 될지 (실제 API 데이터 기반) -->
+            <div class="execution-preview" id="executionPreview">
+                <p class="execution-placeholder" id="executionPlaceholder">
+                    거래 조건 충족 시 실행 예정 정보가 표시됩니다
+                </p>
+                <div class="execution-details" id="executionDetails" style="display: none;"></div>
+            </div>
+            
+            <div class="button-group">
+                <button id="executeBtn" class="btn btn-primary" disabled>
+                    거래 실행
+                </button>
+                <button id="autoToggleBtn" class="btn btn-auto">
+                    🤖 Auto 모드 시작
+                </button>
+            </div>
+            
+            <div class="status-message" id="statusMessage"></div>
+        </section>
+
+        <!-- Auto Mode Stats -->
+        <section class="auto-stats" id="autoStats" style="display: none;">
+            <h3>🤖 Auto 모드 통계</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <label>상태</label>
+                    <value id="autoStatus">⏸️ 정지됨</value>
+                </div>
+                <div class="stat-item">
+                    <label>총 거래</label>
+                    <value id="totalTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>성공</label>
+                    <value id="successfulTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>실패</label>
+                    <value id="failedTrades">0</value>
+                </div>
+                <div class="stat-item">
+                    <label>승률</label>
+                    <value id="successRate">0%</value>
+                </div>
+            </div>
+        </section>
+
+        <!-- Accounts Section -->
+        <section class="accounts">
+            <h3>계정 관리 (<span id="accountCount">0</span>/3)</h3>
+            <div class="accounts-list" id="accountsList">
+                <div class="loading">계정 로딩 중...</div>
+            </div>
+            <div class="accounts-actions">
+                <button type="button" class="btn btn-secondary" id="addAccountBtn">+ 계정 추가</button>
+            </div>
+        </section>
+
+        <!-- Trade History -->
+        <section class="trade-history">
+            <h3>거래 내역</h3>
+            <div class="history-list" id="historyList">
+                <p class="empty-state">거래 내역이 없습니다</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- 계정 추가 모달 -->
+    <div id="addAccountModal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h4>계정 추가 (OKX Wallet PK)</h4>
+            <p class="modal-hint">슬롯을 선택하고 Private Key만 입력하세요. 프록시는 서버 .env(PROXY_1~3)에서 슬롯별 자동 할당됩니다.</p>
+            <form id="addAccountForm">
+                <div class="control-group">
+                    <label>슬롯</label>
+                    <select id="addAccountSlot" required>
+                        <option value="1">계정 1</option>
+                        <option value="2">계정 2</option>
+                        <option value="3">계정 3</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Private Key (OKX Wallet)</label>
+                    <input type="password" id="addAccountPK" placeholder="0x..." required autocomplete="off">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="addAccountCancel">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 좌측 하단 플로팅 리프레시 버튼 -->
+    <button type="button" class="floating-refresh" id="floatingRefreshBtn" title="새로고침">
+        ⟳
+    </button>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

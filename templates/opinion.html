@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opinion.trade - 다중 로그인</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .opinion-header { text-align: center; color: white; margin-bottom: 24px; }
+        .opinion-header h1 { font-size: 2rem; margin-bottom: 8px; }
+        .proxy-alert {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: #856404;
+        }
+        .api-result-section { margin-top: 24px; }
+        .api-result-section summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+        .api-result-section pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; max-height: 400px; overflow-y: auto; }
+        .login-result-card { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 16px; border-radius: 8px; margin-top: 16px; }
+        .opinion-account-card {
+            display: grid;
+            grid-template-columns: 50px 1fr 80px;
+            align-items: center;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            gap: 12px;
+        }
+        .opinion-account-card .eoa { font-family: monospace; font-size: 0.9rem; word-break: break-all; }
+        .opinion-account-card .badge-default { background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="opinion-header">
+            <h1>📊 Opinion.trade</h1>
+            <p class="subtitle">다중 로그인 (OKX Wallet PK)</p>
+        </header>
+
+        <div id="proxyAlert" class="proxy-alert" style="display: none;">
+            ⚠️ 프록시를 추가해 주세요. 코드 내 프록시가 없으면 로그인할 수 없습니다.
+        </div>
+
+        <section class="accounts">
+            <h3>계정 목록 (<span id="accountCount">0</span>)</h3>
+            <div class="accounts-list" id="opinionAccountsList">
+                <div class="loading">계정 로딩 중...</div>
+            </div>
+            <div class="accounts-actions" style="margin-top: 12px;">
+                <button type="button" class="btn btn-primary" id="btnAddAccount">+ 계정 로그인 (PK 입력)</button>
+            </div>
+        </section>
+
+        <section id="loginResultSection" class="api-result-section" style="display: none;">
+            <h3>✅ 로그인 결과 (API 리턴값)</h3>
+            <div id="loginResultEoa" class="login-result-card" style="margin-bottom: 12px;"></div>
+            <details open>
+                <summary>Positions (포지션)</summary>
+                <pre id="loginResultPositions"></pre>
+            </details>
+            <details>
+                <summary>Trades (거래 내역)</summary>
+                <pre id="loginResultTrades"></pre>
+            </details>
+        </section>
+    </div>
+
+    <!-- 계정 로그인 모달: PK만 입력 -->
+    <div id="opinionLoginModal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h4>계정 로그인 (OKX Wallet Private Key)</h4>
+            <p class="modal-hint">Private Key를 입력하면 EOA가 계산되고, Opinion API로 포지션/거래 내역을 가져옵니다. API 키는 해당 지갑과 세트인 경우에만 사용됩니다.</p>
+            <form id="opinionLoginForm">
+                <div class="control-group">
+                    <label>Private Key</label>
+                    <input type="password" id="opinionPK" placeholder="0x..." required autocomplete="off">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="opinionLoginCancel">취소</button>
+                    <button type="submit" class="btn btn-primary">로그인</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/opinion.js') }}"></script>
+</body>
+</html>

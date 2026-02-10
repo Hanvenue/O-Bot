@@ -79,8 +79,59 @@ def check_password():
 
 @app.route('/')
 def index():
-    """Main dashboard"""
+    """Opinion 다중 로그인 대시보드"""
+    return render_template('opinion.html')
+
+
+@app.route('/gyeong')
+def gyeong():
+    """경봇 대시보드 (기존 Predict.fun)"""
     return render_template('index.html')
+
+
+# ---------- Opinion API (다중 로그인) ----------
+from core.opinion_config import has_proxy
+from core.opinion_account import opinion_account_manager
+
+
+@app.route('/api/opinion/proxy-status')
+def opinion_proxy_status():
+    """프록시 설정 여부. 없으면 UI에서 '프록시를 추가해 주세요' 알림용."""
+    return jsonify({'has_proxy': has_proxy()})
+
+
+@app.route('/api/opinion/accounts')
+def opinion_accounts():
+    """등록된 Opinion 계정 목록."""
+    try:
+        accounts = [a.to_dict() for a in opinion_account_manager.get_all()]
+        return jsonify({'success': True, 'accounts': accounts, 'has_proxy': has_proxy()})
+    except Exception as e:
+        logger.exception('opinion accounts: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/opinion/login', methods=['POST'])
+def opinion_login():
+    """
+    OKX Wallet PK로 로그인. 리턴값(positions, trades 등) 전부 반환.
+    Body: { "private_key": "0x..." }
+    """
+    try:
+        data = request.get_json() or {}
+        pk = (data.get('private_key') or '').strip()
+        if not pk:
+            return jsonify({'success': False, 'error': 'private_key를 입력해 주세요.'}), 400
+        result = opinion_account_manager.login_with_pk(pk)
+        if result.get('success'):
+            return jsonify(result)
+        code = result.get('code')
+        if code == 'NO_PROXY':
+            return jsonify(result), 400
+        return jsonify(result), 400
+    except Exception as e:
+        logger.exception('opinion login: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/status')
@@ -505,13 +556,17 @@ def get_auto_stats():
 
 
 if __name__ == '__main__':
-    # Validate config
-    try:
-        Config.validate()
-        logger.info("✅ Configuration validated")
-    except ValueError as e:
-        logger.error(f"❌ Configuration error: {e}")
-        exit(1)
+    import os
+    # Opinion 전용 실행 시 Predict 설정 검증 생략
+    if os.getenv('OPINION_ONLY') != '1':
+        try:
+            Config.validate()
+            logger.info("✅ Configuration validated")
+        except ValueError as e:
+            logger.error(f"❌ Configuration error: {e}")
+            exit(1)
+    else:
+        logger.info("ℹ️ Opinion-only mode (Config.validate skipped)")
     
     # Initialize Telegram bot (if configured)
     if Config.TELEGRAM_BOT_TOKEN and Config.TELEGRAM_CHAT_ID:
