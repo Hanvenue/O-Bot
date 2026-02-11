@@ -57,14 +57,32 @@ python3 app.py
 3. **다른 호스팅**  
    `gunicorn` 등으로 `app:app` 실행하고, 환경 변수만 동일하게 설정하면 됨.
 
+## 오봇 API 엔드포인트 (Opinion OpenAPI 연동)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/opinion/proxy-status` | 프록시 설정 여부 |
+| GET | `/api/opinion/accounts` | 등록된 Opinion 계정 목록 |
+| POST | `/api/opinion/login` | OKX Wallet PK 로그인 (Body: `private_key`) |
+| GET | `/api/opinion/markets` | 시장 목록 (Query: `status`, `sortBy`, `page`, `limit`) |
+| GET | `/api/opinion/market/<market_id>` | 시장 상세 |
+| GET | `/api/opinion/token/latest-price` | 토큰 최신 가격 (Query: `token_id`) |
+| GET | `/api/opinion/token/orderbook` | 토큰 호가창 (Query: `token_id`) |
+| GET | `/api/opinion/token/price-history` | 가격 히스토리 (Query: `token_id`, `interval`) |
+| GET | `/api/opinion/quote-tokens` | 거래 통화 목록 |
+| GET | `/api/opinion/positions/<wallet_address>` | 지갑 포지션 (Query: `page`, `limit`) |
+| GET | `/api/opinion/trades/<wallet_address>` | 지갑 거래 내역 (Query: `page`, `limit`) |
+
+메인 UI(오봇)에서 시장 목록·거래 통화·시장 상세·호가·가격 조회 버튼으로 위 API를 호출해 결과를 볼 수 있습니다.
+
 ## 파일 구조
 
 | 파일 | 설명 |
 |------|------|
 | `core/opinion_config.py` | .env에서 프록시·API키·디폴트 EOA 로드 |
-| `core/opinion_client.py` | Opinion OpenAPI 호출 (positions, trades, market) |
+| `core/opinion_client.py` | Opinion OpenAPI 호출 (시장/토큰/호가/포지션/거래/quoteToken) |
 | `core/opinion_account.py` | 계정 관리 (디폴트 + PK 로그인, EOA-API키 매칭) |
-| `templates/opinion.html` | Opinion 다중 로그인 페이지 |
-| `static/js/opinion.js` | 계정 목록·모달·API 결과 표시 |
+| `templates/opinion.html` | Opinion 다중 로그인 + 시장/통화/조회 UI |
+| `static/js/opinion.js` | 계정 목록·모달·API 결과·엔드포인트 호출 |
 
 API 키·프록시·디폴트 EOA는 `.env`에 넣어서 보관합니다.

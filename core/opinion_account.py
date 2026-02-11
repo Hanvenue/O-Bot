@@ -43,7 +43,7 @@ def _eoa_from_pk(private_key: str) -> Optional[str]:
 
 
 class OpinionAccount:
-    """단일 Opinion 계정 (EOA + 사용하는 API 키·프록시)."""
+    """단일 Opinion 계정 (EOA + 사용하는 API 키·프록시 + 이름)."""
 
     def __init__(
         self,
@@ -52,17 +52,20 @@ class OpinionAccount:
         api_key: str,
         proxy: str,
         is_default: bool = False,
+        name: Optional[str] = None,
     ):
         self.id = account_id
         self.eoa = _normalize_eoa(eoa)
         self.api_key = api_key
         self.proxy = proxy
         self.is_default = is_default
+        self.name = (name or "").strip() or None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "eoa": self.eoa,
+            "name": self.name,
             "proxy_preview": self.proxy.split(":")[0] if self.proxy else "",
             "is_default": self.is_default,
         }
@@ -104,6 +107,7 @@ class OpinionAccountManager:
                             api_key=item.get("api_key") or OPINION_API_KEY,
                             proxy=(item.get("proxy") or OPINION_PROXY or "").strip(),
                             is_default=bool(item.get("is_default")),
+                            name=item.get("name"),
                         )
                     )
                 self._accounts.sort(key=lambda a: a.id)
@@ -117,6 +121,7 @@ class OpinionAccountManager:
             {
                 "id": a.id,
                 "eoa": a.eoa,
+                "name": a.name,
                 "api_key": a.api_key,
                 "proxy": a.proxy,
                 "is_default": a.is_default,
@@ -142,7 +147,7 @@ class OpinionAccountManager:
                 return a
         return None
 
-    def login_with_pk(self, private_key: str) -> Dict[str, Any]:
+    def login_with_pk(self, private_key: str, name: Optional[str] = None) -> Dict[str, Any]:
         """
         PK로 로그인 시도.
         - 프록시 없으면 에러 (프록시를 추가해 주세요)
@@ -162,19 +167,36 @@ class OpinionAccountManager:
         # API 키: 디폴트 EOA와 같을 때만 하드코딩 API 키 사용
         api_key = OPINION_API_KEY if eoa.lower() == _normalize_eoa(OPINION_DEFAULT_EOA).lower() else OPINION_API_KEY
         proxy = OPINION_PROXY.strip()
-        # positions / trades 호출
+        # positions / trades 호출 (문서: walletAddress는 지갑 주소, API 키는 apikey 헤더)
         pos_res = get_positions(eoa, api_key, proxy)
         trade_res = get_trades(eoa, api_key, proxy)
+        if not pos_res.get("ok"):
+            logger.warning("Opinion positions API failed: eoa=%s body=%s", eoa, pos_res.get("data"))
+        if not trade_res.get("ok"):
+            logger.warning("Opinion trades API failed: eoa=%s body=%s", eoa, trade_res.get("data"))
         if not pos_res.get("ok") and not trade_res.get("ok"):
             err = pos_res.get("data") or trade_res.get("data") or {}
-            msg = err.get("msg") or err.get("message") or pos_res.get("error") or "API 요청 실패"
+            api_code = err.get("code")
+            msg = err.get("msg") or err.get("message") or ""
+            if api_code == 401:
+                msg = "API 키 인증 실패(401). 이 API 키는 해당 지갑과 세트로 발급된 것이어야 합니다. " + (msg or "")
+            elif api_code == 400:
+                msg = "잘못된 요청(400). 지갑 주소 형식을 확인하세요. " + (msg or "")
+            elif api_code == 404:
+                msg = "해당 자원 없음(404). " + (msg or "")
+            elif api_code == 429:
+                msg = "요청 한도 초과(429). 잠시 후 다시 시도하세요. " + (msg or "")
+            if not msg:
+                msg = pos_res.get("error") or trade_res.get("error") or "API 요청 실패"
             return {
                 "success": False,
                 "error": msg,
                 "eoa": eoa,
                 "code": "API_ERROR",
+                "api_code": api_code,
             }
-        # 기존 계정에 있으면 그대로, 없으면 추가
+        # 기존 계정에 있으면 이름만 갱신 가능, 없으면 추가
+        nickname = (name or "").strip() or None
         existing = self.get_by_eoa(eoa)
         if not existing:
             next_id = max([a.id for a in self._accounts], default=0) + 1
@@ -184,10 +206,15 @@ class OpinionAccountManager:
                 api_key=api_key,
                 proxy=proxy,
                 is_default=(eoa.lower() == _normalize_eoa(OPINION_DEFAULT_EOA).lower()),
+                name=nickname,
             )
             self._accounts.append(new_acc)
             self._accounts.sort(key=lambda a: a.id)
             self._save()
+        else:
+            if nickname:
+                existing.name = nickname
+                self._save()
         acc = existing or self.get_by_eoa(eoa)
         return {
             "success": True,

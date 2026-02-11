@@ -1,7 +1,8 @@
 // Opinion.trade 다중 로그인 UI
 
 async function fetchWithAuth(url, options = {}) {
-    const res = await fetch(url, options);
+    const opts = { credentials: 'include', ...options };
+    const res = await fetch(url, opts);
     if (res.status === 401) {
         window.location.href = '/login';
         throw new Error('Unauthorized');
@@ -25,10 +26,12 @@ function renderAccounts(accounts) {
     }
     list.innerHTML = accounts.map(function (a) {
         const defaultBadge = a.is_default ? '<span class="badge-default">디폴트</span>' : '';
+        const eoaShort = (a.eoa || '').slice(0, 10) + '...' + (a.eoa || '').slice(-8);
+        const displayName = a.name ? (a.name + ' (' + eoaShort + ')') : eoaShort;
         return (
             '<div class="opinion-account-card">' +
             '<span class="account-id">#' + a.id + '</span>' +
-            '<div><span class="eoa">' + (a.eoa || '').slice(0, 10) + '...' + (a.eoa || '').slice(-8) + '</span> ' + defaultBadge + '</div>' +
+            '<div><span class="account-name">' + displayName + '</span> ' + defaultBadge + '</div>' +
             '<span style="font-size:0.8rem;color:#666">' + (a.proxy_preview || '') + '</span>' +
             '</div>'
         );
@@ -71,6 +74,7 @@ function openLoginModal() {
     const modal = document.getElementById('opinionLoginModal');
     const pkInput = document.getElementById('opinionPK');
     if (modal && pkInput) {
+        document.getElementById('opinionName') && (document.getElementById('opinionName').value = '');
         pkInput.value = '';
         modal.style.display = 'flex';
     }
@@ -84,6 +88,7 @@ function closeLoginModal() {
 async function submitOpinionLogin(e) {
     e.preventDefault();
     const pk = (document.getElementById('opinionPK') && document.getElementById('opinionPK').value || '').trim();
+    const name = (document.getElementById('opinionName') && document.getElementById('opinionName').value || '').trim();
     if (!pk) return;
     const submitBtn = e.target && e.target.querySelector('button[type="submit"]');
     if (submitBtn) {
@@ -94,7 +99,7 @@ async function submitOpinionLogin(e) {
         const res = await fetchWithAuth('/api/opinion/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ private_key: pk })
+            body: JSON.stringify({ private_key: pk, name: name || undefined })
         });
         const data = await res.json();
         if (data.success) {
@@ -114,10 +119,88 @@ async function submitOpinionLogin(e) {
     }
 }
 
+function setResultBox(id, content, isError) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = content || '';
+    el.classList.toggle('empty', !content);
+    if (isError) el.style.background = '#f8d7da';
+    else el.style.background = '#f5f5f5';
+}
+
+function formatTimestamp(ts) {
+    if (ts == null || ts === '') return '-';
+    var t = parseInt(ts, 10);
+    if (t > 1e12) t = Math.floor(t / 1000);
+    var d = new Date(t * 1000);
+    return d.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function renderBtcUpDownCard(data) {
+    var wrap = document.getElementById('btcUpDownResult');
+    if (!wrap) return;
+    wrap.classList.remove('api-result-box');
+    var m = data.result || {};
+    var topicId = data.topicId || m.marketId || '-';
+    var title = m.marketTitle || '-';
+    var thumb = (m.thumbnailUrl || '').trim();
+    var vol = m.volume != null ? String(m.volume) : '-';
+    var created = formatTimestamp(m.createdAt);
+    var cutoff = formatTimestamp(m.cutoffAt);
+    var imgHtml = thumb
+        ? '<div class="btc-card-img-wrap"><img src="' + thumb.replace(/"/g, '&quot;') + '" alt="" onerror="this.parentElement.classList.add(\'failed\')"><div class="btc-card-img-placeholder">No image</div></div>'
+        : '<div class="btc-card-img-placeholder">No image</div>';
+    wrap.innerHTML =
+        '<div class="btc-market-card">' +
+        '<div>' + imgHtml + '</div>' +
+        '<div class="info">' +
+        '<span class="topic-id">topicId: ' + topicId + '</span>' +
+        '<div class="title">' + title + '</div>' +
+        '<div class="row"><strong>생성:</strong> ' + created + '</div>' +
+        '<div class="row"><strong>종료:</strong> ' + cutoff + '</div>' +
+        '<div class="row"><strong>거래량:</strong> ' + vol + '</div>' +
+        '</div></div>';
+}
+
+async function loadBtcUpDown() {
+    var box = document.getElementById('btcUpDownResult');
+    if (!box) return;
+    box.innerHTML = '불러오는 중...';
+    box.classList.add('api-result-box');
+    try {
+        var res = await fetchWithAuth('/api/opinion/btc-up-down');
+        var text = await res.text();
+        var data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            var preview = text.length > 150 ? text.slice(0, 150) + '...' : text;
+            box.innerHTML = '서버 응답 오류 (JSON 아님). 상태: ' + res.status + '\n\n응답 미리보기:\n' + preview.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            box.style.background = '#f8d7da';
+            box.style.whiteSpace = 'pre-wrap';
+            return;
+        }
+        if (data.success && (data.result !== undefined || data.topicId)) {
+            renderBtcUpDownCard(data);
+        } else {
+            box.innerHTML = data.error || '실패';
+            box.style.background = '#f8d7da';
+        }
+    } catch (e) {
+        box.innerHTML = '오류: ' + e.message;
+        box.style.background = '#f8d7da';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     loadOpinionAccounts();
+    loadBtcUpDown();
     document.getElementById('btnAddAccount') && document.getElementById('btnAddAccount').addEventListener('click', openLoginModal);
+    document.getElementById('btnLoadBtcUpDown') && document.getElementById('btnLoadBtcUpDown').addEventListener('click', loadBtcUpDown);
     document.getElementById('opinionLoginCancel') && document.getElementById('opinionLoginCancel').addEventListener('click', closeLoginModal);
     document.querySelector('#opinionLoginModal .modal-overlay') && document.querySelector('#opinionLoginModal .modal-overlay').addEventListener('click', closeLoginModal);
     document.getElementById('opinionLoginForm') && document.getElementById('opinionLoginForm').addEventListener('submit', submitOpinionLogin);
+    document.getElementById('btnAutoGo') && document.getElementById('btnAutoGo').addEventListener('click', function () { alert('자동 Go! (기능 연동 예정)'); });
+    document.getElementById('btnManualGo') && document.getElementById('btnManualGo').addEventListener('click', function () { alert('수동 Go! (기능 연동 예정)'); });
+    setInterval(loadBtcUpDown, 3600000);
 });
