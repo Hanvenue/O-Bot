@@ -72,8 +72,19 @@ python3 app.py
 | GET | `/api/opinion/quote-tokens` | 거래 통화 목록 |
 | GET | `/api/opinion/positions/<wallet_address>` | 지갑 포지션 (Query: `page`, `limit`) |
 | GET | `/api/opinion/trades/<wallet_address>` | 지갑 거래 내역 (Query: `page`, `limit`) |
+| GET | `/api/opinion/btc-up-down` | Bitcoin Up or Down **1시간 마켓** 최신 시장 (캐시 1시간) |
+| GET | `/api/opinion/manual-trade/status` | 수동 거래 상태 (Query: `topic_id`, `shares`) — 전략 미리보기 |
+| POST | `/api/opinion/manual-trade/execute` | 수동 자전거래 실행 (Body: `topic_id`, `shares`, `direction`, `maker_account_id`, `taker_account_id`) |
 
 메인 UI(오봇)에서 시장 목록·거래 통화·시장 상세·호가·가격 조회 버튼으로 위 API를 호출해 결과를 볼 수 있습니다.
+
+## 수동 거래 (1시간 마켓 자전거래)
+
+- **대상 시장**: Bitcoin Up or Down 시리즈 (1시간 단위 마켓).
+- **규칙**: README(경봇)와 동일 — Maker(수수료 0%) + Taker 조합으로 자전거래, 손익 0 이상 유지·리워드 수익.
+- **필요 조건**: 최소 **2개 계정** 로그인, API 키·프록시 설정. 실제 주문은 **Opinion CLOB SDK** 연동 후 가능 (현재는 전략 미리보기·실행 API까지 구현, CLOB 미연동 시 안내 메시지 반환).
+- **UI**: 1시간 마켓 "불러오기" → **수동 Go!** → Topic ID·Shares·방향(UP/DOWN)·Maker/Taker 계정 선택 → 실행.
+- **확장성**: 여러 계정 로그인 가능하므로 Maker/Taker를 서로 다른 계정으로 선택해 자전거래 가능.
 
 ## 파일 구조
 
@@ -82,7 +93,10 @@ python3 app.py
 | `core/opinion_config.py` | .env에서 프록시·API키·디폴트 EOA 로드 |
 | `core/opinion_client.py` | Opinion OpenAPI 호출 (시장/토큰/호가/포지션/거래/quoteToken) |
 | `core/opinion_account.py` | 계정 관리 (디폴트 + PK 로그인, EOA-API키 매칭) |
-| `templates/opinion.html` | Opinion 다중 로그인 + 시장/통화/조회 UI |
-| `static/js/opinion.js` | 계정 목록·모달·API 결과·엔드포인트 호출 |
+| `core/opinion_btc_topic.py` | Bitcoin Up or Down 1시간 마켓 topicId 조회 |
+| `core/opinion_manual_trade.py` | 수동 거래: 1시간 마켓 상태·전략 미리보기·자전거래 실행(CLOB 스텁) |
+| `core/opinion_clob_order.py` | CLOB 주문 스텁 (실제 연동 시 opinion-clob-sdk 사용) |
+| `templates/opinion.html` | Opinion 다중 로그인 + 1시간 마켓 + 수동 Go! 모달 |
+| `static/js/opinion.js` | 계정 목록·모달·수동 거래 연동·API 호출 |
 
 API 키·프록시·디폴트 EOA는 `.env`에 넣어서 보관합니다.

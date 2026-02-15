@@ -150,6 +150,7 @@ function renderBtcUpDownCard(data) {
     var imgHtml = thumb
         ? '<div class="btc-card-img-wrap"><img src="' + thumb.replace(/"/g, '&quot;') + '" alt="" onerror="this.parentElement.classList.add(\'failed\')"><div class="btc-card-img-placeholder">No image</div></div>'
         : '<div class="btc-card-img-placeholder">No image</div>';
+    window.currentOpinionTopicId = topicId;
     wrap.innerHTML =
         '<div class="btc-market-card">' +
         '<div>' + imgHtml + '</div>' +
@@ -201,6 +202,113 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelector('#opinionLoginModal .modal-overlay') && document.querySelector('#opinionLoginModal .modal-overlay').addEventListener('click', closeLoginModal);
     document.getElementById('opinionLoginForm') && document.getElementById('opinionLoginForm').addEventListener('submit', submitOpinionLogin);
     document.getElementById('btnAutoGo') && document.getElementById('btnAutoGo').addEventListener('click', function () { alert('자동 Go! (기능 연동 예정)'); });
-    document.getElementById('btnManualGo') && document.getElementById('btnManualGo').addEventListener('click', function () { alert('수동 Go! (기능 연동 예정)'); });
+    document.getElementById('btnManualGo') && document.getElementById('btnManualGo').addEventListener('click', openManualTradeModal);
+    document.getElementById('manualTradeCancel') && document.getElementById('manualTradeCancel').addEventListener('click', closeManualTradeModal);
+    document.querySelector('#manualTradeModal .modal-overlay') && document.querySelector('#manualTradeModal .modal-overlay').addEventListener('click', closeManualTradeModal);
+    document.getElementById('manualTradeForm') && document.getElementById('manualTradeForm').addEventListener('submit', submitManualTrade);
     setInterval(loadBtcUpDown, 3600000);
 });
+
+function closeManualTradeModal() {
+    var modal = document.getElementById('manualTradeModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function openManualTradeModal() {
+    var topicId = window.currentOpinionTopicId;
+    if (!topicId) {
+        alert('먼저 "불러오기"로 1시간 마켓을 불러와 주세요.');
+        return;
+    }
+    var modal = document.getElementById('manualTradeModal');
+    var topicInput = document.getElementById('manualTopicId');
+    if (topicInput) topicInput.value = topicId;
+    var sharesInput = document.getElementById('manualShares');
+    if (sharesInput) sharesInput.value = 10;
+    fetchWithAuth('/api/opinion/manual-trade/status?topic_id=' + topicId + '&shares=10')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.error && !data.topic_id) {
+                alert(data.error || '상태 조회 실패');
+                return;
+            }
+            if (!data.trade_ready) {
+                alert(data.trade_reason || '거래 대기 중');
+                return;
+            }
+            fillManualTradeAccounts();
+            if (modal) modal.style.display = 'flex';
+        })
+        .catch(function (e) {
+            alert('조회 오류: ' + (e.message || e));
+        });
+}
+
+function fillManualTradeAccounts() {
+    fetchWithAuth('/api/opinion/accounts')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var accounts = (data.accounts || []);
+            var makerSel = document.getElementById('manualMakerAccount');
+            var takerSel = document.getElementById('manualTakerAccount');
+            if (!makerSel || !takerSel) return;
+            makerSel.innerHTML = '';
+            takerSel.innerHTML = '';
+            accounts.forEach(function (a) {
+                var label = (a.name || a.eoa) ? (a.name || '') + ' ' + (a.eoa || '').slice(0, 8) + '...' : '#' + a.id;
+                makerSel.appendChild(new Option(label, a.id));
+                takerSel.appendChild(new Option(label, a.id));
+            });
+            if (accounts.length >= 2) {
+                makerSel.value = accounts[0].id;
+                takerSel.value = accounts[1].id;
+            }
+        });
+}
+
+function submitManualTrade(e) {
+    e.preventDefault();
+    var topicId = parseInt(document.getElementById('manualTopicId').value, 10);
+    var shares = parseInt(document.getElementById('manualShares').value, 10) || 10;
+    var direction = (document.getElementById('manualDirection') && document.getElementById('manualDirection').value) || 'UP';
+    var makerId = document.getElementById('manualMakerAccount') && document.getElementById('manualMakerAccount').value;
+    var takerId = document.getElementById('manualTakerAccount') && document.getElementById('manualTakerAccount').value;
+    var btn = document.getElementById('manualTradeSubmit');
+    if (btn) { btn.disabled = true; btn.textContent = '실행 중...'; }
+    var resultEl = document.getElementById('manualTradeResult');
+    fetchWithAuth('/api/opinion/manual-trade/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            topic_id: topicId,
+            shares: shares,
+            direction: direction,
+            maker_account_id: makerId ? parseInt(makerId, 10) : undefined,
+            taker_account_id: takerId ? parseInt(takerId, 10) : undefined
+        })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (resultEl) {
+                resultEl.style.display = 'block';
+                if (data.success) {
+                    resultEl.className = 'manual-trade-result success';
+                    resultEl.textContent = '실행 완료. Maker: ' + (data.maker_order_id || '-') + ', Taker: ' + (data.taker_order_id || '-');
+                } else {
+                    resultEl.className = 'manual-trade-result ' + (data.needs_clob ? 'info' : 'error');
+                    resultEl.textContent = data.error || '실패';
+                }
+            }
+            if (data.success) closeManualTradeModal();
+        })
+        .catch(function (err) {
+            if (resultEl) {
+                resultEl.style.display = 'block';
+                resultEl.className = 'manual-trade-result error';
+                resultEl.textContent = '오류: ' + (err.message || err);
+            }
+        })
+        .finally(function () {
+            if (btn) { btn.disabled = false; btn.textContent = '실행'; }
+        });
+}

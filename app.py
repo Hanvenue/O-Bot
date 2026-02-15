@@ -103,6 +103,7 @@ from core.opinion_client import (
     get_trades,
 )
 from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
+from core.opinion_manual_trade import get_1h_market_for_trade, execute_manual_trade
 
 
 def _opinion_auth():
@@ -168,6 +169,75 @@ def opinion_btc_up_down():
         return jsonify({'success': True, 'topicId': topic_id, 'result': market})
     except Exception as e:
         logger.exception('btc-up-down error: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/opinion/manual-trade/status')
+def opinion_manual_trade_status():
+    """1시간 마켓 수동 거래 상태 (전략 미리보기, 계정 추천). Query: topic_id(선택), shares(기본 10)."""
+    try:
+        topic_id = request.args.get('topic_id', type=int)
+        shares = request.args.get('shares', 10, type=int)
+        shares = max(1, min(shares, 1000))
+        status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, skip_gap_check=True)
+        if status.get('error') and not status.get('topic_id'):
+            return jsonify(status), 400
+        if status.get('strategy_preview'):
+            status['strategy_preview']['maker']['shares'] = shares
+            status['strategy_preview']['taker']['shares'] = shares
+        return jsonify(status)
+    except Exception as e:
+        logger.exception('manual-trade status: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/opinion/manual-trade/execute', methods=['POST'])
+def opinion_manual_trade_execute():
+    """
+    수동 자전거래 실행. Body: topic_id, shares, direction(UP/DOWN, 선택), maker_account_id, taker_account_id(선택).
+    """
+    try:
+        data = request.get_json() or {}
+        topic_id = data.get('topic_id')
+        try:
+            topic_id = int(topic_id) if topic_id is not None else None
+        except (TypeError, ValueError):
+            topic_id = None
+        shares = data.get('shares', 10)
+        try:
+            shares = max(1, int(shares))
+        except (TypeError, ValueError):
+            shares = 10
+        direction = (data.get('direction') or 'UP').strip().upper() or 'UP'
+        if direction not in ('UP', 'DOWN'):
+            direction = 'UP'
+        maker_account_id = data.get('maker_account_id')
+        taker_account_id = data.get('taker_account_id')
+        if maker_account_id is not None:
+            try:
+                maker_account_id = int(maker_account_id)
+            except (TypeError, ValueError):
+                maker_account_id = None
+        if taker_account_id is not None:
+            try:
+                taker_account_id = int(taker_account_id)
+            except (TypeError, ValueError):
+                taker_account_id = None
+        if not topic_id:
+            return jsonify({'success': False, 'error': 'topic_id가 필요합니다.'}), 400
+        result = execute_manual_trade(
+            topic_id=topic_id,
+            shares=shares,
+            direction=direction,
+            maker_account_id=maker_account_id,
+            taker_account_id=taker_account_id,
+        )
+        if result.get('success'):
+            return jsonify(result)
+        status_code = 400 if result.get('needs_clob') or result.get('error') else 400
+        return jsonify(result), status_code
+    except Exception as e:
+        logger.exception('manual-trade execute: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
