@@ -1,0 +1,787 @@
+{
+  "timestamp": "2026-02-16T04:39:10.342Z",
+  "reason": "compaction",
+  "status": {
+    "version": "2.0",
+    "lastUpdated": "2026-02-16T04:33:56.979Z",
+    "activeFeatures": [
+      "core",
+      "gyeong-bot",
+      "js"
+    ],
+    "primaryFeature": "core",
+    "features": {
+      "core": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T20:57:01.886Z",
+          "lastUpdated": "2026-02-16T04:23:52.530Z"
+        },
+        "lastFile": "/Users/han/Downloads/gyeong-bot/core/opinion_manual_trade.py"
+      },
+      "gyeong-bot": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T20:57:22.750Z",
+          "lastUpdated": "2026-02-16T04:33:12.258Z"
+        },
+        "lastFile": "/Users/han/Downloads/gyeong-bot/app.py"
+      },
+      "js": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-02-10T20:59:24.232Z",
+          "lastUpdated": "2026-02-16T04:33:56.978Z"
+        },
+        "lastFile": "/Users/han/Downloads/gyeong-bot/static/js/opinion.js"
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-02-10T20:57:01.886Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-02-16T04:33:56.979Z"
+    },
+    "history": [
+      {
+        "timestamp": "2026-02-10T20:57:01.886Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T20:57:22.750Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T20:57:45.411Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T20:59:24.232Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T21:02:21.520Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T21:09:44.110Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T21:09:57.850Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T21:11:27.048Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-10T21:14:41.981Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:04.434Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:05.711Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:06.199Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:18.962Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:20.848Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:21.874Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:31.812Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:32.885Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:36.596Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:37.140Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:05:43.551Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:13:32.856Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:13.957Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:14.498Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:15:19.578Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:17:07.374Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:17:09.701Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:17:25.472Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:20:59.571Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:16.325Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:20.304Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:24.998Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:31.224Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:45.579Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:46.187Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:47.895Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:50.393Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:52.343Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:21:54.501Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:23:01.366Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:23:53.241Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:23:56.923Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:24:27.099Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:24:30.341Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-11T12:27:40.390Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:39:13.696Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:39:55.093Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:02.647Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:39.116Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:46.108Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:49.489Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:50.017Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:40:58.741Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:41:17.278Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:41:28.166Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:41:53.446Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:55:38.958Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:55:40.215Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:58:33.956Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T08:58:47.389Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:02:10.522Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:02:21.472Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:03:05.248Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:03:18.241Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:05:52.319Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:06:59.542Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:07:06.342Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:07:54.939Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:08:05.250Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:08:10.131Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:10:20.932Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:10:26.738Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:10:46.908Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:13:37.806Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:13:44.913Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:13:48.593Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:13:51.855Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:13:54.612Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:14:09.726Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:00.340Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:02.805Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:17.118Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:21.316Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:30.900Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:18:42.523Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:19:06.943Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:19:18.286Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:19:23.480Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:22:34.776Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:22:40.752Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:26:28.685Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:27:10.318Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:27:34.126Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-15T09:27:51.690Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:02:13.968Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:02:19.277Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:03:38.336Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:03:49.688Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:04:00.380Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:04:18.433Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:04:29.810Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:04:37.751Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:05:32.545Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:05:38.698Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:05:47.133Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:05:54.082Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:06:03.217Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:06:10.431Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:19:11.648Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:21:34.502Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:21:39.631Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:21:40.441Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:21:44.022Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:22:37.537Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:23:52.028Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:23:52.530Z",
+        "feature": "core",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:23:54.364Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:24:03.710Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:24:09.525Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:33:12.259Z",
+        "feature": "gyeong-bot",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-02-16T04:33:56.979Z",
+        "feature": "js",
+        "phase": "do",
+        "action": "updated"
+      }
+    ]
+  }
+}

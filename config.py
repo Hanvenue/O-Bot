@@ -1,5 +1,7 @@
 """
-경봇 (Gyeong Bot) - Configuration
+오봇/경봇 공용 설정.
+- 오봇(O-Bot) 전용 레포에서는 Config.validate()를 호출하지 않음 (Predict/계정 검증 불필요).
+- SECRET_KEY, PYTH, TIME_BEFORE_END, MIN_PRICE_GAP 등 Opinion에서 사용.
 """
 import os
 from dotenv import load_dotenv

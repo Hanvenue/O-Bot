@@ -94,9 +94,14 @@ python3 app.py
 | `core/opinion_client.py` | Opinion OpenAPI 호출 (시장/토큰/호가/포지션/거래/quoteToken) |
 | `core/opinion_account.py` | 계정 관리 (디폴트 + PK 로그인, EOA-API키 매칭) |
 | `core/opinion_btc_topic.py` | Bitcoin Up or Down 1시간 마켓 topicId 조회 |
+| `core/opinion_errors.py` | Opinion API 에러 해석 → 사용자용 메시지 (401/404/429/500 등) |
 | `core/opinion_manual_trade.py` | 수동 거래: 1시간 마켓 상태·전략 미리보기·자전거래 실행(CLOB 스텁) |
 | `core/opinion_clob_order.py` | CLOB 주문 스텁 (실제 연동 시 opinion-clob-sdk 사용) |
 | `templates/opinion.html` | Opinion 다중 로그인 + 1시간 마켓 + 수동 Go! 모달 |
 | `static/js/opinion.js` | 계정 목록·모달·수동 거래 연동·API 호출 |
 
 API 키·프록시·디폴트 EOA는 `.env`에 넣어서 보관합니다.
+
+## 에러 표시 규칙
+
+- Opinion API가 401/404/429/500 등을 반환해도 **원문을 UI에 그대로 내지 않고**, `core/opinion_errors.py`에서 해석한 **사용자용 메시지**만 표시한다. 자세한 규칙: [docs/OPINION_ERROR_HANDLING.md](docs/OPINION_ERROR_HANDLING.md).

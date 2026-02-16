@@ -5,18 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Opinion.trade - 다중 로그인</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.8.1/nouislider.min.css" />
     <style>
-        .opinion-header { text-align: center; color: white; margin-bottom: 24px; }
-        .opinion-header h1 { font-size: 2rem; margin-bottom: 8px; }
+        .opinion-header { text-align: center; color: white; margin-bottom: 32px; }
+        .opinion-header h1 { font-size: 2rem; margin-bottom: 12px; }
         .proxy-alert {
             background: #fff3cd;
             border: 1px solid #ffc107;
             border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
+            padding: 14px 20px;
+            margin-bottom: 28px;
             color: #856404;
         }
-        .api-result-section { margin-top: 24px; }
+        .api-result-section { margin-top: 32px; }
         .api-result-section summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
         .api-result-section pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; max-height: 400px; overflow-y: auto; }
         .login-result-card { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 16px; border-radius: 8px; margin-top: 16px; }
@@ -24,25 +25,25 @@
             display: grid;
             grid-template-columns: 50px 1fr 80px;
             align-items: center;
-            padding: 12px 16px;
+            padding: 16px 20px;
             background: #f8f9fa;
             border-radius: 8px;
-            gap: 12px;
+            gap: 16px;
         }
         .opinion-account-card .eoa { font-family: monospace; font-size: 0.9rem; word-break: break-all; }
-        .opinion-account-card .badge-default { background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
-        .opinion-data-section { margin-top: 24px; }
-        .opinion-actions { margin-bottom: 12px; }
+        .opinion-account-card .badge-default { background: #667eea; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px; }
+        .opinion-data-section { margin-top: 32px; }
+        .opinion-actions { margin-bottom: 16px; }
         .api-result-box { background: #f5f5f5; padding: 12px; border-radius: 8px; font-size: 0.85rem; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
         .api-result-box.empty { color: #999; }
-        .btc-market-card-wrap { margin-top: 12px; }
+        .btc-market-card-wrap { margin-top: 20px; }
         .btc-market-card {
             display: grid;
             grid-template-columns: 140px 1fr;
-            gap: 20px;
+            gap: 24px;
             background: #fff;
             border-radius: 12px;
-            padding: 20px;
+            padding: 24px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         }
         .btc-market-card img { width: 120px; height: 90px; object-fit: contain; border-radius: 8px; }
@@ -56,17 +57,115 @@
         .btc-market-card .row { font-size: 0.9rem; color: #555; }
         .btc-market-card .row strong { color: #333; margin-right: 6px; }
         .btc-market-card .topic-id { display: inline-block; background: #667eea; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; }
-        .cta-buttons { display: flex; gap: 16px; margin-top: 20px; }
+        .cta-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 28px; }
+        .shares-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 24px; margin-bottom: 20px; margin-top: 24px; }
+        .shares-common { display: flex; align-items: center; gap: 16px; }
+        .shares-common label { margin-right: 0; font-weight: 600; }
+        .shares-price-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 24px;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%);
+            border: 1px solid #c5d4f7;
+            border-radius: 12px;
+            min-height: 52px;
+            box-shadow: 0 1px 4px rgba(102, 126, 234, 0.12);
+        }
+        .shares-price-card .label { font-size: 0.75rem; color: #5a6c9a; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 4px; }
+        .shares-price-ratio .ratio-value { font-size: 1.25rem; font-weight: 700; color: #333; }
+        .shares-price-ratio .ratio-value .up { color: #28a745; }
+        .shares-price-ratio .ratio-value .down { color: #dc3545; }
+        .shares-price-total .total-value { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; }
+        .auto-inline { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .auto-status-text { font-size: 0.9rem; color: #666; }
+        .manual-inline label { margin-right: 0; }
+        .shares-control { display: inline-flex; align-items: center; gap: 12px; }
+        .shares-control .manualSharesInput { width: 56px; text-align: center; font-weight: 600; padding: 8px 6px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+        .shares-control .manualSharesInput::-webkit-outer-spin-button,
+        .shares-control .manualSharesInput::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .shares-control .manualSharesInput[type=number] { -moz-appearance: textfield; }
+        .shares-stepper-btn { width: 36px; height: 36px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-size: 1.25rem; font-weight: 700; line-height: 1; cursor: pointer; color: #333; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .shares-stepper-btn:hover { background: #f0f0f0; border-color: #999; }
+        .shares-stepper-btn:active { background: #e0e0e0; }
+        #sharesSlider { margin: 0; width: 160px; }
+        #sharesSlider.noUi-target { border-radius: 8px; }
+        #sharesSlider .noUi-connect { background: #667eea; }
+        #sharesSlider .noUi-handle { width: 20px; height: 20px; border-radius: 50%; top: -8px; }
         .btn-cta { padding: 14px 28px; font-size: 1.1rem; font-weight: 700; border-radius: 10px; border: none; cursor: pointer; transition: all 0.2s; }
         .btn-cta-auto { background: #28a745; color: #fff; }
         .btn-cta-auto:hover { background: #218838; transform: translateY(-1px); }
         .btn-cta-manual { background: #667eea; color: #fff; }
         .btn-cta-manual:hover { background: #5568d3; transform: translateY(-1px); }
-        .manual-trade-result { padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; }
+        .manual-trade-result { padding: 16px 20px; border-radius: 8px; font-size: 0.9rem; margin-top: 20px; }
         .manual-trade-result.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
         .manual-trade-result.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
         .manual-trade-result.info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
         .readonly-input { background: #eee; cursor: default; }
+        .btc-gap-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            padding: 24px;
+            color: #eee;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .btc-gap-card h4 { margin: 0 0 20px 0; font-size: 0.95rem; color: #a0aec0; }
+        .btc-gap-card .market-name { font-size: 1rem; color: #fff; margin-bottom: 20px; word-break: break-word; }
+        .btc-gap-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .btc-gap-row:last-child { border-bottom: none; }
+        .btc-gap-row .label { color: #a0aec0; font-size: 0.9rem; }
+        .btc-gap-row .value { font-weight: 700; font-size: 1.1rem; }
+        .btc-gap-row .value.gap-up { color: #48bb78; }
+        .btc-gap-row .value.gap-down { color: #f56565; }
+        .btc-gap-row .value.gap-zero { color: #e2e8f0; }
+        .btc-gap-card .live-badge { display: inline-block; background: #48bb78; color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; margin-left: 8px; animation: pulse 2s infinite; }
+        @keyframes pulse { 50% { opacity: 0.8; } }
+        /* 직전 거래 성공 여부 카드 (페페 밈) */
+        .last-trade-card {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-top: 32px;
+            min-height: 140px;
+        }
+        .last-trade-card .pepe-wrap {
+            flex-shrink: 0;
+            width: 120px;
+            height: 120px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .last-trade-card .pepe-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .last-trade-card .pepe-wrap.state-success { background: #d4edda; }
+        .last-trade-card .pepe-wrap.state-fail { background: #f8d7da; }
+        .last-trade-card .pepe-wrap.state-black-swan { background: #fff3cd; }
+        .last-trade-card .pepe-wrap.state-unknown { background: #e2e8f0; }
+        .last-trade-card .body { flex: 1; }
+        .last-trade-card .body h4 { margin: 0 0 8px 0; font-size: 1rem; color: #333; }
+        .last-trade-card .body .status-text { margin: 0; font-size: 0.9rem; color: #555; }
+        .overall-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-top: 16px; }
+        .overall-controls { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; align-items: center; }
+        .overall-metric, .overall-range { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .overall-label { font-size: 0.8rem; color: #666; font-weight: 600; }
+        .overall-btn { padding: 8px 14px; border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; font-size: 0.9rem; }
+        .overall-btn:hover { background: #f0f0f0; border-color: #999; }
+        .overall-btn.active { background: #667eea; color: #fff; border-color: #667eea; }
+        .overall-chart-wrap { position: relative; min-height: 200px; }
+        .overall-chart-wrap canvas { max-width: 100%; }
+        .overall-placeholder { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #999; margin: 0; }
     </style>
 </head>
 <body>
@@ -85,24 +184,103 @@
             <div class="accounts-list" id="opinionAccountsList">
                 <div class="loading">계정 로딩 중...</div>
             </div>
-            <div class="accounts-actions" style="margin-top: 12px;">
+            <div class="accounts-actions" style="margin-top: 20px;">
                 <button type="button" class="btn btn-primary" id="btnAddAccount">+ 계정 로그인 (PK 입력)</button>
             </div>
         </section>
 
         <section class="opinion-data-section">
-            <h3>₿ Bitcoin Up or Down (최신 시장, 1시간 갱신)</h3>
+            <h3>₿ Bitcoin 시세 & Gap (주청 시간 기준)</h3>
+            <div id="btcPriceGapCard" class="btc-gap-card" style="display: none;">
+                <h4>주청 시간 기준 실시간 시세 <span class="live-badge">LIVE</span></h4>
+                <div class="market-name" id="btcGapMarketName">—</div>
+                <div class="btc-gap-row">
+                    <span class="label">시작 시 Bitcoin</span>
+                    <span class="value" id="btcGapStartPrice">—</span>
+                </div>
+                <div class="btc-gap-row">
+                    <span class="label">현재 시세</span>
+                    <span class="value" id="btcGapCurrentPrice">—</span>
+                </div>
+                <div class="btc-gap-row">
+                    <span class="label">Gap</span>
+                    <span class="value" id="btcGapGap">—</span>
+                </div>
+            </div>
+            <div id="btcPriceGapError" class="proxy-alert" style="display: none;"></div>
+            <p class="empty-state" id="btcPriceGapPlaceholder">1시간 마켓 불러오기 후 시세가 표시됩니다.</p>
+
+            <h3 style="margin-top: 36px;">₿ Bitcoin Up or Down (최신 시장, 1시간 갱신)</h3>
             <div class="opinion-actions">
                 <button type="button" class="btn btn-primary" id="btnLoadBtcUpDown">불러오기</button>
             </div>
             <div id="btcUpDownResult" class="btc-market-card-wrap">
                 <p class="empty-state">불러오기 버튼을 눌러 주세요.</p>
             </div>
+            <!-- Shares: 자동 Go! / 수동 Go! 공통 + 현재 가격/예상 금액 -->
+            <div class="shares-row">
+                <div class="shares-common">
+                    <label for="manualSharesInput">Shares</label>
+                    <div class="shares-control">
+                        <button type="button" class="shares-stepper-btn shares-stepper-minus" id="sharesMinus" aria-label="Shares 감소">−</button>
+                        <div id="sharesSlider"></div>
+                        <input type="number" id="manualSharesInput" class="manualSharesInput" min="1" max="1000" value="10" aria-label="Shares 수량">
+                        <button type="button" class="shares-stepper-btn shares-stepper-plus" id="sharesPlus" aria-label="Shares 증가">+</button>
+                    </div>
+                </div>
+                <div id="sharesPriceCard" class="shares-price-card">
+                    <div class="shares-price-ratio">
+                        <span class="label">Up / Down</span>
+                        <span id="sharesPriceRatio" class="ratio-value">— : —</span>
+                    </div>
+                    <div class="shares-price-total">
+                        <span class="label">예상 거래액 (계정 1+2 총액)</span>
+                        <span id="sharesPriceTotal" class="total-value">—</span>
+                    </div>
+                </div>
+            </div>
             <div class="cta-buttons">
-                <button type="button" class="btn btn-cta btn-cta-auto" id="btnAutoGo">자동 Go!</button>
+                <span class="auto-inline">
+                    <button type="button" class="btn btn-cta btn-cta-auto" id="btnAutoGo">자동 Go!</button>
+                    <button type="button" class="btn btn-secondary" id="btnAutoStop" style="display: none;">자동 중지</button>
+                    <span id="autoStatusText" class="auto-status-text"></span>
+                </span>
                 <button type="button" class="btn btn-cta btn-cta-manual" id="btnManualGo">수동 Go!</button>
             </div>
-            <div id="manualTradeResult" class="manual-trade-result" style="display: none; margin-top: 16px;"></div>
+            <div id="manualTradeResult" class="manual-trade-result" style="display: none;"></div>
+
+            <h3 style="margin-top: 36px;">직전 거래 성공 여부</h3>
+            <div id="lastTradeCard" class="last-trade-card" data-state="unknown">
+                <div class="pepe-wrap state-unknown" id="lastTradePepeWrap">
+                    <img id="lastTradePepeImg" src="" alt="직전 거래 상태" title="정보 없음">
+                </div>
+                <div class="body">
+                    <h4 id="lastTradeCardTitle">직전 거래 성공 여부</h4>
+                    <p class="status-text" id="lastTradeStatusText">아직 거래 결과가 없습니다.</p>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 36px;">Overall</h3>
+            <div id="overallCard" class="overall-card">
+                <div class="overall-controls">
+                    <div class="overall-metric">
+                        <span class="overall-label">표시</span>
+                        <button type="button" class="overall-btn active" data-metric="volume" id="overallMetricVolume">총 거래량</button>
+                        <button type="button" class="overall-btn" data-metric="usdt" id="overallMetricUsdt">USDT 총합</button>
+                    </div>
+                    <div class="overall-range">
+                        <span class="overall-label">기간</span>
+                        <button type="button" class="overall-btn active" data-range="6h">6H</button>
+                        <button type="button" class="overall-btn" data-range="1d">1D</button>
+                        <button type="button" class="overall-btn" data-range="7d">7D</button>
+                        <button type="button" class="overall-btn" data-range="30d">30D</button>
+                    </div>
+                </div>
+                <div class="overall-chart-wrap">
+                    <canvas id="overallChart" width="400" height="200"></canvas>
+                    <p id="overallChartPlaceholder" class="overall-placeholder" style="display: none;">데이터를 불러오는 중...</p>
+                </div>
+            </div>
         </section>
 
         <section id="loginResultSection" class="api-result-section" style="display: none;">
@@ -117,44 +295,6 @@
                 <pre id="loginResultTrades"></pre>
             </details>
         </section>
-    </div>
-
-    <!-- 수동 거래 모달: shares, 방향, 계정 선택 -->
-    <div id="manualTradeModal" class="modal" style="display: none;">
-        <div class="modal-overlay"></div>
-        <div class="modal-content">
-            <h4>📊 수동 자전거래 (1시간 마켓)</h4>
-            <p class="modal-hint">Maker(수수료 0%) + Taker 조합. 최소 2개 계정 필요. API 키/CLOB 연동 후 실제 주문이 가능합니다.</p>
-            <form id="manualTradeForm">
-                <div class="control-group">
-                    <label>Topic ID (현재 시장)</label>
-                    <input type="number" id="manualTopicId" readonly class="readonly-input">
-                </div>
-                <div class="control-group">
-                    <label>Shares (수량)</label>
-                    <input type="number" id="manualShares" min="1" max="1000" value="10">
-                </div>
-                <div class="control-group">
-                    <label>방향</label>
-                    <select id="manualDirection">
-                        <option value="UP">UP (Maker UP + Taker DOWN)</option>
-                        <option value="DOWN">DOWN (Maker DOWN + Taker UP)</option>
-                    </select>
-                </div>
-                <div class="control-group" id="manualMakerAccountWrap">
-                    <label>Maker 계정</label>
-                    <select id="manualMakerAccount"></select>
-                </div>
-                <div class="control-group" id="manualTakerAccountWrap">
-                    <label>Taker 계정</label>
-                    <select id="manualTakerAccount"></select>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="manualTradeCancel">취소</button>
-                    <button type="submit" class="btn btn-primary" id="manualTradeSubmit">실행</button>
-                </div>
-            </form>
-        </div>
     </div>
 
     <!-- 계정 로그인 모달: PK만 입력 -->
@@ -180,6 +320,8 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.8.1/nouislider.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/opinion.js') }}"></script>
 </body>
 </html>

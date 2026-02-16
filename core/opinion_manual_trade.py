@@ -12,6 +12,7 @@ from core.opinion_config import OPINION_API_KEY, OPINION_PROXY, has_proxy
 from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_client import get_market, get_orderbook
 from core.opinion_account import opinion_account_manager, OpinionAccount
+from core.btc_price import btc_price_service
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +54,37 @@ def _best_price(levels: list, want_low: bool) -> Optional[float]:
     return min(prices) if want_low else max(prices)
 
 
+def _market_start_timestamp(market: dict) -> Optional[int]:
+    """시장 구간 시작 시각(Unix 초). collection.current.startTime 우선, 없으면 cutoffAt - 3600."""
+    cur = market.get("collection") and market.get("collection").get("current")
+    if cur and cur.get("startTime") is not None:
+        try:
+            t = int(float(cur["startTime"]))
+            return t // 1000 if t > 1e12 else t
+        except (TypeError, ValueError):
+            pass
+    cutoff = market.get("cutoffAt") or 0
+    try:
+        t = int(float(cutoff))
+        if t > 1e12:
+            t = t // 1000
+        if t > 0:
+            return t - 3600
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
 def get_1h_market_for_trade(
     topic_id: Optional[int] = None,
     skip_time_check: bool = True,
     skip_gap_check: bool = True,
+    shares: int = 10,
 ) -> Dict[str, Any]:
     """
     1시간 마켓(Bitcoin Up or Down) 수동 거래용 상태 반환.
     - 시장 정보, yesTokenId/noTokenId, 호가창 기반 Maker/Taker 가격
-    - trade_ready, trade_direction, strategy_preview (README 규칙)
+    - trade_ready, trade_direction, strategy_preview (shares 기준 계정 1+2 총 거래액)
     """
     out = {
         "success": False,
@@ -138,11 +161,21 @@ def get_1h_market_for_trade(
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
     taker_price_down = round(1.0 - maker_price_up, 2)
 
-    # 방향: 수동 거래는 UP 기준 전략 제공 (갭 검사 스킵 시 UP 권장)
+    # 방향: Maker 유리 = 갭 기준 (현재가 >= 시작가 → UP, 그 외 DOWN). 경봇 validate_market 로직과 동일.
     direction = "UP"
+    start_ts = _market_start_timestamp(market_dict)
+    if start_ts is not None:
+        start_price = btc_price_service.get_price_at_timestamp(start_ts)
+        current_price = btc_price_service.get_current_price()
+        if start_price is not None and current_price is not None:
+            direction = "UP" if current_price >= start_price else "DOWN"
+    maker_price = maker_price_up if direction == "UP" else (1.0 - maker_price_up)
+    taker_price = round(1.0 - maker_price, 2)
+    taker_side = "DOWN" if direction == "UP" else "UP"
+
     out["trade_ready"] = True
     out["trade_direction"] = direction
-    out["trade_reason"] = "수동 거래 가능 (Maker UP + Taker DOWN)"
+    out["trade_reason"] = f"수동 거래 가능 (Maker {direction} + Taker {taker_side})"
 
     accounts = opinion_account_manager.get_all()
     maker_account = None
@@ -155,25 +188,25 @@ def get_1h_market_for_trade(
 
     def _preview(shares: int = 10):
         s = max(1, shares)
-        maker_inv = maker_price_up * s
-        taker_inv = taker_price_down * s
+        maker_inv = maker_price * s
+        taker_inv = taker_price * s
         total = maker_inv + taker_inv
         taker_fee = taker_inv * 0.002
         return {
             "status": "arbitrage_ready",
-            "status_message": "자전거래 가능 - Maker(UP 수수료 0%) + Taker(DOWN)",
+            "status_message": f"자전거래 가능 - Maker({direction} 수수료 0%) + Taker({taker_side})",
             "maker": {
-                "side": "UP",
-                "price": maker_price_up,
-                "price_display": f"{int(maker_price_up*100)}¢",
+                "side": direction,
+                "price": maker_price,
+                "price_display": f"{int(maker_price*100)}¢",
                 "investment": round(maker_inv, 2),
                 "fee": 0,
                 "account_id": maker_account.id if maker_account else None,
             },
             "taker": {
-                "side": "DOWN",
-                "price": taker_price_down,
-                "price_display": f"{int(taker_price_down*100)}¢",
+                "side": taker_side,
+                "price": taker_price,
+                "price_display": f"{int(taker_price*100)}¢",
                 "investment": round(taker_inv, 2),
                 "fee": round(taker_fee, 4),
                 "account_id": taker_account.id if taker_account else None,
@@ -184,10 +217,11 @@ def get_1h_market_for_trade(
             "no_token_id": no_token,
         }
 
-    out["strategy_preview"] = _preview()
+    out["strategy_preview"] = _preview(max(1, min(1000, int(shares))))
     out["yes_token_id"] = yes_token
     out["no_token_id"] = no_token
     out["maker_price_up"] = maker_price_up
+    out["maker_price"] = maker_price  # 선택된 방향(direction) 기준 Maker 가격
     out["time_remaining"] = time_remaining
     out["success"] = True
     return out
@@ -196,15 +230,15 @@ def get_1h_market_for_trade(
 def execute_manual_trade(
     topic_id: int,
     shares: int,
-    direction: str = "UP",
+    direction: Optional[str] = None,
     maker_account_id: Optional[int] = None,
     taker_account_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     수동 자전거래 실행.
-    - Maker: direction 방향 LIMIT 주문 (수수료 0%)
-    - Taker: 반대 방향으로 매칭 (수수료 발생)
-    API 키/CLOB 미연동 시 안내 메시지 반환.
+    - direction 미지정 시: status의 trade_direction(Maker 유리 방향) 사용.
+    - maker/taker 미지정 시: 계정 목록 순서로 자동 배정 (accounts[0]=Maker, accounts[1]=Taker).
+    - Maker: direction 방향 LIMIT 주문 (수수료 0%), Taker: 반대 방향 매칭.
     """
     if not has_proxy() or not OPINION_API_KEY:
         return {"success": False, "error": "API 키 또는 프록시를 설정해 주세요."}
@@ -220,6 +254,7 @@ def execute_manual_trade(
     if len(accounts) < 2:
         return {"success": False, "error": "자전거래는 최소 2개 계정이 필요합니다."}
 
+    # Maker/Taker 미지정 시 자동 배정 (경봇과 동일: 순서 고정 또는 추후 잔액 기준 확장 가능)
     maker_acc = opinion_account_manager.get_by_id(maker_account_id) if maker_account_id else None
     taker_acc = opinion_account_manager.get_by_id(taker_account_id) if taker_account_id else None
     if not maker_acc:
@@ -229,13 +264,14 @@ def execute_manual_trade(
     if maker_acc.id == taker_acc.id:
         return {"success": False, "error": "Maker와 Taker는 서로 다른 계정이어야 합니다."}
 
-    direction = (direction or "UP").upper()
+    # 방향 미지정 시 status의 Maker 유리 방향(trade_direction) 사용
+    direction = (direction or status.get("trade_direction") or "UP").strip().upper()
     if direction not in ("UP", "DOWN"):
         direction = "UP"
     shares = max(1, int(shares))
-    maker_price = status.get("maker_price_up") or 0.5
-    if direction == "DOWN":
-        maker_price = 1.0 - maker_price
+    maker_price = status.get("maker_price") or status.get("maker_price_up") or 0.5
+    if direction == "DOWN" and status.get("maker_price") is None:
+        maker_price = 1.0 - (status.get("maker_price_up") or 0.5)
     taker_price = round(1.0 - maker_price, 2)
 
     # CLOB SDK 연동 (미설치/미연동 시 스텁)

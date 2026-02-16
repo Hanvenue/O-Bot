@@ -1,3 +1,3 @@
 """
-경봇 Core Modules
+오봇 (O-Bot) Core Modules - Opinion 전용
 """

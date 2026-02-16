@@ -175,25 +175,16 @@ class OpinionAccountManager:
         if not trade_res.get("ok"):
             logger.warning("Opinion trades API failed: eoa=%s body=%s", eoa, trade_res.get("data"))
         if not pos_res.get("ok") and not trade_res.get("ok"):
-            err = pos_res.get("data") or trade_res.get("data") or {}
-            api_code = err.get("code")
-            msg = err.get("msg") or err.get("message") or ""
-            if api_code == 401:
-                msg = "API 키 인증 실패(401). 이 API 키는 해당 지갑과 세트로 발급된 것이어야 합니다. " + (msg or "")
-            elif api_code == 400:
-                msg = "잘못된 요청(400). 지갑 주소 형식을 확인하세요. " + (msg or "")
-            elif api_code == 404:
-                msg = "해당 자원 없음(404). " + (msg or "")
-            elif api_code == 429:
-                msg = "요청 한도 초과(429). 잠시 후 다시 시도하세요. " + (msg or "")
-            if not msg:
-                msg = pos_res.get("error") or trade_res.get("error") or "API 요청 실패"
+            err_body = pos_res.get("data") or trade_res.get("data") or {}
+            status = pos_res.get("status_code") or trade_res.get("status_code") or 500
+            from core.opinion_errors import interpret_opinion_api_response
+            interpreted = interpret_opinion_api_response(status, err_body, context="로그인")
             return {
                 "success": False,
-                "error": msg,
+                "error": interpreted["user_message"],
                 "eoa": eoa,
                 "code": "API_ERROR",
-                "api_code": api_code,
+                "api_code": err_body.get("code") if isinstance(err_body, dict) else status,
             }
         # 기존 계정에 있으면 이름만 갱신 가능, 없으면 추가
         nickname = (name or "").strip() or None
