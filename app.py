@@ -232,7 +232,7 @@ def opinion_manual_trade_status():
         shares = request.args.get('shares', 10, type=int)
         shares = max(1, min(shares, 1000))
         status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, skip_gap_check=True, shares=shares)
-        if not status.get('ok'):
+        if not status.get('success'):
             return jsonify({'success': False, 'error': status.get('error', '상태 조회 실패')}), 400
         return jsonify({'success': True, **status})
     except Exception as e:
@@ -261,7 +261,7 @@ def opinion_manual_trade_execute():
         shares = max(1, min(shares, 1000))
         if direction not in ('UP', 'DOWN'):
             return jsonify({'success': False, 'error': 'direction은 UP 또는 DOWN이어야 합니다.'}), 400
-        result = execute_manual_trade(topic_id=topic_id, account_id=account_id, shares=shares, direction=direction)
+        result = execute_manual_trade(topic_id=topic_id, shares=shares, direction=direction, maker_account_id=account_id)
         if result.get('success'):
             return jsonify(result)
         return jsonify(result), 400
@@ -272,14 +272,17 @@ def opinion_manual_trade_execute():
 
 @app.route('/api/opinion/auto/start', methods=['POST'])
 def opinion_auto_start():
-    """자동 거래 시작. Body: account_id(선택)."""
+    """자동 거래 시작. Body: shares(선택, 기본 10)."""
     try:
         data = request.get_json() or {}
-        account_id = data.get('account_id')
-        result = opinion_auto_trader.start(account_id=account_id)
-        if result.get('success'):
-            return jsonify(result)
-        return jsonify(result), 400
+        shares = data.get('shares', 10)
+        if opinion_auto_trader.is_running:
+            return jsonify({'success': False, 'error': '이미 실행 중입니다.'}), 400
+        import asyncio
+        loop = asyncio.new_event_loop()
+        import threading
+        threading.Thread(target=lambda: loop.run_until_complete(opinion_auto_trader.start(shares=shares)), daemon=True).start()
+        return jsonify({'success': True, 'message': '자동 거래가 시작되었습니다.'})
     except Exception as e:
         logger.exception('opinion auto start: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -289,8 +292,8 @@ def opinion_auto_start():
 def opinion_auto_stop():
     """자동 거래 중지."""
     try:
-        result = opinion_auto_trader.stop()
-        return jsonify(result)
+        opinion_auto_trader.stop()
+        return jsonify({'success': True, 'message': '자동 거래가 중지되었습니다.'})
     except Exception as e:
         logger.exception('opinion auto stop: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -300,7 +303,7 @@ def opinion_auto_stop():
 def opinion_auto_status():
     """자동 거래 상태 (running, account_id, last_error 등)."""
     try:
-        status = opinion_auto_trader.get_status()
+        status = opinion_auto_trader.get_statistics()
         return jsonify({'success': True, **status})
     except Exception as e:
         logger.exception('opinion auto status: %s', e)
@@ -311,7 +314,8 @@ def opinion_auto_status():
 def opinion_auto_error_message():
     """마지막 자동 거래 오류 메시지 (UI용)."""
     try:
-        msg = get_auto_error_message()
+        error_code = request.args.get('error_code', 'UNKNOWN')
+        msg = get_auto_error_message(error_code)
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         logger.exception('opinion auto error message: %s', e)
@@ -322,7 +326,7 @@ def opinion_auto_error_message():
 def opinion_auto_stats():
     """자동 거래 통계 (성공/실패 횟수 등)."""
     try:
-        stats = opinion_auto_trader.get_stats()
+        stats = opinion_auto_trader.get_statistics()
         return jsonify({'success': True, 'stats': stats})
     except Exception as e:
         logger.exception('opinion auto stats: %s', e)
