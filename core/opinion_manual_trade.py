@@ -416,10 +416,16 @@ def _run_wash_trade_via_clob(
         }
 
     order_id_taker = taker_res.get("order_id") or taker_res.get("id")
+    if not order_id_taker:
+        try:
+            cancel_order(maker_account, order_id_maker)
+        except Exception:
+            pass
+        return {"success": False, "error": "Taker 주문 ID를 받지 못했습니다.", "taker_result": taker_res}
 
     # 3) 체결 확인 (get_order_status 폴링, 최대 10초)
     deadline = time.time() + 10
-    interval = 0.8
+    interval = 1.5
     maker_filled = False
     taker_filled = False
     while time.time() < deadline:

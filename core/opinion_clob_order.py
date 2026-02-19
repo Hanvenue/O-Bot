@@ -38,7 +38,7 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
 def _get_clob_client(account: OpinionAccount):
     """
     Opinion CLOB SDK Client 생성.
-    account.api_key, account.proxy 사용. 프록시는 HTTP_PROXY/HTTPS_PROXY로 설정 후 복원.
+    account.api_key, account.proxy 사용. 프록시는 Configuration.proxy + RESTClient 재생성으로 주입 (레이스 컨디션 방지).
     """
     creds = _get_clob_credentials(account)
     if not creds:
@@ -46,42 +46,32 @@ def _get_clob_client(account: OpinionAccount):
     private_key, multi_sig_addr = creds
     try:
         from opinion_clob_sdk import Client
-        from opinion_clob_sdk.chain.py_order_utils.model.order import PlaceOrderDataInput
-        from opinion_clob_sdk.chain.py_order_utils.model.sides import OrderSide
-        from opinion_clob_sdk.chain.py_order_utils.model.order_type import LIMIT_ORDER
     except ImportError as e:
         logger.warning("opinion_clob_sdk import failed: %s", e)
         return None
 
-    # 프록시가 있으면 요청 시점에만 환경변수로 설정 (SDK 내부 requests가 사용)
-    proxy_str = (account.proxy or "").strip()
-    old_http = os.environ.pop("HTTP_PROXY", None)
-    old_https = os.environ.pop("HTTPS_PROXY", None)
-    if proxy_str and ":" in proxy_str:
-        parts = proxy_str.split(":")
-        if len(parts) == 4:
-            ip, port, user, password = parts
-            proxy_url = f"http://{user}:{password}@{ip}:{port}"
-            os.environ["HTTP_PROXY"] = proxy_url
-            os.environ["HTTPS_PROXY"] = proxy_url
-    try:
-        client = Client(
-            host=OPINION_CLOB_HOST,
-            apikey=account.api_key,
-            chain_id=56,
-            rpc_url=BSC_RPC_URL,
-            private_key=private_key,
-            multi_sig_addr=multi_sig_addr,
-        )
-        return client
-    finally:
-        if old_http is not None:
-            os.environ["HTTP_PROXY"] = old_http
-        if old_https is not None:
-            os.environ["HTTPS_PROXY"] = old_https
-        elif proxy_str:
-            os.environ.pop("HTTP_PROXY", None)
-            os.environ.pop("HTTPS_PROXY", None)
+    client = Client(
+        host=OPINION_CLOB_HOST,
+        apikey=account.api_key,
+        chain_id=56,
+        rpc_url=BSC_RPC_URL,
+        private_key=private_key,
+        multi_sig_addr=multi_sig_addr,
+    )
+
+    proxy_dict = get_proxy_dict(account.proxy or "")
+    if proxy_dict and hasattr(client, "api_client") and client.api_client is not None:
+        conf = client.api_client.configuration
+        proxy_url = proxy_dict.get("https") or proxy_dict.get("http")
+        if proxy_url and conf is not None:
+            conf.proxy = proxy_url
+            try:
+                from opinion_api.rest import RESTClientObject
+                client.api_client.rest_client = RESTClientObject(conf)
+            except Exception as e:
+                logger.debug("CLOB RESTClient proxy 주입 실패 (프록시 없이 진행): %s", e)
+
+    return client
 
 
 def place_limit_order(
