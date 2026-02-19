@@ -8,11 +8,12 @@ import time
 from typing import Optional, Dict, Any, List, Tuple
 
 from config import Config
-from core.opinion_config import OPINION_API_KEY, OPINION_PROXY, has_proxy
+from core.opinion_config import OPINION_API_KEY, OPINION_PROXY, has_proxy, get_proxy_dict
 from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_client import get_market, get_orderbook
 from core.opinion_account import opinion_account_manager, OpinionAccount
 from core.btc_price import btc_price_service
+from core.okx_balance import get_usdt_balance_for_address
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +309,38 @@ def execute_manual_trade(
     return result
 
 
+def _check_balance_for_wash_trade(
+    maker_account: OpinionAccount,
+    taker_account: OpinionAccount,
+    maker_price: float,
+    taker_price: float,
+    shares: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    자전거래 전 양쪽 계정 잔고 확인.
+    Maker 필요: maker_price * shares (USDT)
+    Taker 필요: taker_price * shares * 1.002 (수수료 0.2% 포함)
+    부족 시 (False, "계정 N: OO USDT 부족" 형태 메시지) 반환.
+    """
+    maker_need = maker_price * shares
+    taker_need = taker_price * shares * 1.002
+    proxy_maker = get_proxy_dict(maker_account.proxy or "") if maker_account.proxy else None
+    proxy_taker = get_proxy_dict(taker_account.proxy or "") if taker_account.proxy else None
+    bal_maker = get_usdt_balance_for_address(maker_account.eoa, proxy_maker)
+    bal_taker = get_usdt_balance_for_address(taker_account.eoa, proxy_taker)
+    if bal_maker is None:
+        return False, "Maker 계정 잔고를 조회할 수 없습니다."
+    if bal_taker is None:
+        return False, "Taker 계정 잔고를 조회할 수 없습니다."
+    if bal_maker < maker_need:
+        short = round(maker_need - bal_maker, 2)
+        return False, f"Maker 계정(Wallet {maker_account.id}) 잔고 부족: {short} USDT 필요 (보유: {round(bal_maker, 2)} USDT)"
+    if bal_taker < taker_need:
+        short = round(taker_need - bal_taker, 2)
+        return False, f"Taker 계정(Wallet {taker_account.id}) 잔고 부족: {short} USDT 필요 (보유: {round(bal_taker, 2)} USDT)"
+    return True, None
+
+
 def _run_wash_trade_via_clob(
     topic_id: int,
     yes_token_id: str,
@@ -319,11 +352,11 @@ def _run_wash_trade_via_clob(
     shares: int,
 ) -> Dict[str, Any]:
     """
-    CLOB를 이용한 자전거래: Maker LIMIT → Taker 매칭.
-    opinion_clob_order 모듈이 있으면 호출, 없으면 스텁.
+    CLOB를 이용한 자전거래: 잔고 확인 → Maker LIMIT → Taker 매칭 → 체결 확인(최대 10초).
+    미체결 시 양쪽 주문 취소 후 "미체결" 에러 반환.
     """
     try:
-        from core.opinion_clob_order import place_limit_order
+        from core.opinion_clob_order import place_limit_order, cancel_order, get_order_status
     except ImportError:
         return {
             "success": False,
@@ -335,9 +368,15 @@ def _run_wash_trade_via_clob(
     token_taker = no_token_id if direction == "UP" else yes_token_id
     taker_price = round(1.0 - maker_price, 2)
 
+    # 0) 잔고 사전 검증
+    ok, err = _check_balance_for_wash_trade(maker_account, taker_account, maker_price, taker_price, shares)
+    if not ok:
+        return {"success": False, "error": err}
+
     # 1) Maker LIMIT 주문
     maker_res = place_limit_order(
         account=maker_account,
+        market_id=topic_id,
         token_id=token_maker,
         side="BUY",
         price=maker_price,
@@ -351,20 +390,22 @@ def _run_wash_trade_via_clob(
         }
 
     order_id_maker = maker_res.get("order_id") or maker_res.get("id")
+    if not order_id_maker:
+        return {"success": False, "error": "Maker 주문 ID를 받지 못했습니다.", "maker_result": maker_res}
+
     time.sleep(2)
 
-    # 2) Taker 주문 (반대 쪽 매칭)
+    # 2) Taker 주문 (Maker 주문 체결시키기 위한 매칭)
     taker_res = place_limit_order(
         account=taker_account,
+        market_id=topic_id,
         token_id=token_taker,
         side="BUY",
         price=taker_price,
         size=shares,
     )
     if not taker_res.get("success"):
-        # Maker 취소 시도
         try:
-            from core.opinion_clob_order import cancel_order
             cancel_order(maker_account, order_id_maker)
         except Exception:
             pass
@@ -374,12 +415,48 @@ def _run_wash_trade_via_clob(
             "taker_result": taker_res,
         }
 
+    order_id_taker = taker_res.get("order_id") or taker_res.get("id")
+    if not order_id_taker:
+        try:
+            cancel_order(maker_account, order_id_maker)
+        except Exception:
+            pass
+        return {"success": False, "error": "Taker 주문 ID를 받지 못했습니다.", "taker_result": taker_res}
+
+    # 3) 체결 확인 (get_order_status 폴링, 최대 10초)
+    deadline = time.time() + 10
+    interval = 1.5
+    maker_filled = False
+    taker_filled = False
+    while time.time() < deadline:
+        sm = get_order_status(maker_account, order_id_maker)
+        st = get_order_status(taker_account, order_id_taker)
+        maker_filled = sm.get("filled", False)
+        taker_filled = st.get("filled", False)
+        if maker_filled and taker_filled:
+            return {
+                "success": True,
+                "maker_order_id": order_id_maker,
+                "taker_order_id": order_id_taker,
+                "direction": direction,
+                "maker_price": maker_price,
+                "taker_price": taker_price,
+                "shares": shares,
+            }
+        time.sleep(interval)
+
+    # 4) 미체결 시 양쪽 취소
+    try:
+        cancel_order(maker_account, order_id_maker)
+    except Exception:
+        pass
+    try:
+        cancel_order(taker_account, order_id_taker)
+    except Exception:
+        pass
     return {
-        "success": True,
+        "success": False,
+        "error": "미체결: 10초 내 양쪽 체결되지 않아 주문을 취소했습니다.",
         "maker_order_id": order_id_maker,
-        "taker_order_id": taker_res.get("order_id") or taker_res.get("id"),
-        "direction": direction,
-        "maker_price": maker_price,
-        "taker_price": taker_price,
-        "shares": shares,
+        "taker_order_id": order_id_taker,
     }
