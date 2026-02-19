@@ -319,11 +319,11 @@ def _run_wash_trade_via_clob(
     shares: int,
 ) -> Dict[str, Any]:
     """
-    CLOB를 이용한 자전거래: Maker LIMIT → Taker 매칭.
-    opinion_clob_order 모듈이 있으면 호출, 없으면 스텁.
+    CLOB를 이용한 자전거래: 잔고 확인 → Maker LIMIT → Taker 매칭 → 체결 확인(최대 10초).
+    미체결 시 양쪽 주문 취소 후 "미체결" 에러 반환.
     """
     try:
-        from core.opinion_clob_order import place_limit_order
+        from core.opinion_clob_order import place_limit_order, cancel_order, get_order_status
     except ImportError:
         return {
             "success": False,
@@ -338,6 +338,7 @@ def _run_wash_trade_via_clob(
     # 1) Maker LIMIT 주문
     maker_res = place_limit_order(
         account=maker_account,
+        market_id=topic_id,
         token_id=token_maker,
         side="BUY",
         price=maker_price,
@@ -351,20 +352,22 @@ def _run_wash_trade_via_clob(
         }
 
     order_id_maker = maker_res.get("order_id") or maker_res.get("id")
+    if not order_id_maker:
+        return {"success": False, "error": "Maker 주문 ID를 받지 못했습니다.", "maker_result": maker_res}
+
     time.sleep(2)
 
-    # 2) Taker 주문 (반대 쪽 매칭)
+    # 2) Taker 주문 (Maker 주문 체결시키기 위한 매칭)
     taker_res = place_limit_order(
         account=taker_account,
+        market_id=topic_id,
         token_id=token_taker,
         side="BUY",
         price=taker_price,
         size=shares,
     )
     if not taker_res.get("success"):
-        # Maker 취소 시도
         try:
-            from core.opinion_clob_order import cancel_order
             cancel_order(maker_account, order_id_maker)
         except Exception:
             pass
@@ -374,12 +377,42 @@ def _run_wash_trade_via_clob(
             "taker_result": taker_res,
         }
 
+    order_id_taker = taker_res.get("order_id") or taker_res.get("id")
+
+    # 3) 체결 확인 (get_order_status 폴링, 최대 10초)
+    deadline = time.time() + 10
+    interval = 0.8
+    maker_filled = False
+    taker_filled = False
+    while time.time() < deadline:
+        sm = get_order_status(maker_account, order_id_maker)
+        st = get_order_status(taker_account, order_id_taker)
+        maker_filled = sm.get("filled", False)
+        taker_filled = st.get("filled", False)
+        if maker_filled and taker_filled:
+            return {
+                "success": True,
+                "maker_order_id": order_id_maker,
+                "taker_order_id": order_id_taker,
+                "direction": direction,
+                "maker_price": maker_price,
+                "taker_price": taker_price,
+                "shares": shares,
+            }
+        time.sleep(interval)
+
+    # 4) 미체결 시 양쪽 취소
+    try:
+        cancel_order(maker_account, order_id_maker)
+    except Exception:
+        pass
+    try:
+        cancel_order(taker_account, order_id_taker)
+    except Exception:
+        pass
     return {
-        "success": True,
+        "success": False,
+        "error": "미체결: 10초 내 양쪽 체결되지 않아 주문을 취소했습니다.",
         "maker_order_id": order_id_maker,
-        "taker_order_id": taker_res.get("order_id") or taker_res.get("id"),
-        "direction": direction,
-        "maker_price": maker_price,
-        "taker_price": taker_price,
-        "shares": shares,
+        "taker_order_id": order_id_taker,
     }
