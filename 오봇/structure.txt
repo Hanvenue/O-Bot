@@ -1,4 +1,0 @@
-docs
-structure.txt
-
-./docs:

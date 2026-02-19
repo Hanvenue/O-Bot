@@ -44,6 +44,11 @@ logs/
 .coverage
 htmlcov/
 
+# Cursor/tool state files
+.bkit-memory.json
+.pdca-status.json
+오봇/
+
 # Distribution
 build/
 dist/
