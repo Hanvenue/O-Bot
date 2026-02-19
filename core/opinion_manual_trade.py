@@ -8,11 +8,12 @@ import time
 from typing import Optional, Dict, Any, List, Tuple
 
 from config import Config
-from core.opinion_config import OPINION_API_KEY, OPINION_PROXY, has_proxy
+from core.opinion_config import OPINION_API_KEY, OPINION_PROXY, has_proxy, get_proxy_dict
 from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_client import get_market, get_orderbook
 from core.opinion_account import opinion_account_manager, OpinionAccount
 from core.btc_price import btc_price_service
+from core.okx_balance import get_usdt_balance_for_address
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +309,38 @@ def execute_manual_trade(
     return result
 
 
+def _check_balance_for_wash_trade(
+    maker_account: OpinionAccount,
+    taker_account: OpinionAccount,
+    maker_price: float,
+    taker_price: float,
+    shares: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    자전거래 전 양쪽 계정 잔고 확인.
+    Maker 필요: maker_price * shares (USDT)
+    Taker 필요: taker_price * shares * 1.002 (수수료 0.2% 포함)
+    부족 시 (False, "계정 N: OO USDT 부족" 형태 메시지) 반환.
+    """
+    maker_need = maker_price * shares
+    taker_need = taker_price * shares * 1.002
+    proxy_maker = get_proxy_dict(maker_account.proxy or "") if maker_account.proxy else None
+    proxy_taker = get_proxy_dict(taker_account.proxy or "") if taker_account.proxy else None
+    bal_maker = get_usdt_balance_for_address(maker_account.eoa, proxy_maker)
+    bal_taker = get_usdt_balance_for_address(taker_account.eoa, proxy_taker)
+    if bal_maker is None:
+        return False, "Maker 계정 잔고를 조회할 수 없습니다."
+    if bal_taker is None:
+        return False, "Taker 계정 잔고를 조회할 수 없습니다."
+    if bal_maker < maker_need:
+        short = round(maker_need - bal_maker, 2)
+        return False, f"Maker 계정(Wallet {maker_account.id}) 잔고 부족: {short} USDT 필요 (보유: {round(bal_maker, 2)} USDT)"
+    if bal_taker < taker_need:
+        short = round(taker_need - bal_taker, 2)
+        return False, f"Taker 계정(Wallet {taker_account.id}) 잔고 부족: {short} USDT 필요 (보유: {round(bal_taker, 2)} USDT)"
+    return True, None
+
+
 def _run_wash_trade_via_clob(
     topic_id: int,
     yes_token_id: str,
@@ -334,6 +367,11 @@ def _run_wash_trade_via_clob(
     token_maker = yes_token_id if direction == "UP" else no_token_id
     token_taker = no_token_id if direction == "UP" else yes_token_id
     taker_price = round(1.0 - maker_price, 2)
+
+    # 0) 잔고 사전 검증
+    ok, err = _check_balance_for_wash_trade(maker_account, taker_account, maker_price, taker_price, shares)
+    if not ok:
+        return {"success": False, "error": err}
 
     # 1) Maker LIMIT 주문
     maker_res = place_limit_order(
