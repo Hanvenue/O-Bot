@@ -35,6 +35,7 @@
 
 ## 4. Claude가 할 일 (리뷰/PR 시)
 
+- **맥락 읽기 (토큰 절약):** 전체 코드 리뷰 전에 **`docs/CLAUDE_CODE_CONTEXT.md`**를 한 번 읽고, 레포가 오봇 전용·구조·변동사항을 이해한 뒤 진행합니다. 전체 코드베이스를 탐색하지 않습니다.
 - **입력:** Cursor가 작업한 **브랜치의 diff** (사용자가 지정한 최신 작업 브랜치).
 - **행동:** 해당 브랜치의 `git diff`(또는 변경 파일 목록)만 보고 코드 리뷰 또는 PR 설명/검토를 수행합니다.
 - **문서:** 리뷰 시 README 등 문서 변경이 논리적 단위에 맞게 포함되었는지 확인합니다.
@@ -44,7 +45,8 @@
 ## 5. 규칙 파일 위치 (동기화용)
 
 - **이 문서:** `docs/COLLAB_WORKFLOW.md` — Git에 올라가는 단일 기준.
+- **레포 맥락 (Claude 토큰 절약):** `docs/CLAUDE_CODE_CONTEXT.md` — 오봇 레포 변동·구조 요약. 리뷰 전 Claude가 먼저 읽을 문서.
 - **Cursor:** `.cursorrules`, `.cursor/rules/collab-claude-code.mdc` — 위 내용과 맞춤.
 - **Claude:** `.claude/rules/collab-cursor.md` — Claude가 바로 이해하도록 위 내용을 지시문 형태로 정리.
 
-Git에 올릴 때는 위 규칙대로 반영하면 되고, **Claude는 이 문서(`docs/COLLAB_WORKFLOW.md`)와 `.claude/rules/`를 읽으면 워크플로우를 바로 이해할 수 있습니다.**
+Git에 올릴 때는 위 규칙대로 반영하면 되고, **Claude는 `docs/CLAUDE_CODE_CONTEXT.md` → 이 문서 → `.claude/rules/` 순으로 읽으면 맥락·워크플로우를 바로 이해할 수 있습니다.**
