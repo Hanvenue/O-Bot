@@ -9,5 +9,8 @@ predict-sdk==0.0.12
 # Web3
 eth-account>=0.10.0
 
+# Opinion CLOB (주문/취소/상태 조회)
+opinion-clob-sdk>=0.6.0
+
 # Telegram
 python-telegram-bot>=20.7
