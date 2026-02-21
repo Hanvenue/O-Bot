@@ -69,3 +69,11 @@
 - **O-Bot 전용.** 경봇(gyeong-bot) 미포함.
 - **기존 .env 호환:** 계정 1(OPINION_DEFAULT_EOA, OPINION_API_KEY, OPINION_PROXY), 계정 2(OPINION_EOA_2, OPINION_API_KEY_2, OPINION_PROXY_2) 그대로 동작.
 - **확장:** 계정 3 이상은 OPINION_EOA_N, OPINION_API_KEY_N, OPINION_PROXY_N 으로 추가 가능.
+
+---
+
+### 수정 반영 (Claude 리뷰 후)
+
+- **opinion_config.get_env_accounts():** 계정 2 빈 경우에도 계정 3 로드되도록 `break` → 계정 1만 `break`, 2~N은 `continue`.
+- **opinion_account._load():** .env mtime 캐시 도입 — 파일 변경 없으면 재로드 스킵하여 get_all() 호출 시 성능 개선.
+- **opinion_clob_order._place_order_impl():** MARKET 주문 시 SDK 전달 price를 `"1.0"`으로 고정(즉시 체결 우선), amount_quote는 기존 price 기준 유지.

@@ -116,6 +116,8 @@ def _place_order_impl(
     side_val = OrderSide.BUY if (side or "BUY").strip().upper() == "BUY" else OrderSide.SELL
     amount_quote = max(0.01, float(price) * max(1, int(size)))
     order_type = MARKET_ORDER if order_type_name == "MARKET_ORDER" else LIMIT_ORDER
+    # MARKET 주문 시 SDK에 넘기는 price는 1.0(슬리피지 상한 최대). amount_quote는 원래 price 기준 유지.
+    sdk_price = "1.0" if order_type_name == "MARKET_ORDER" else str(round(float(price), 2))
 
     try:
         data = PlaceOrderDataInput(
@@ -123,7 +125,7 @@ def _place_order_impl(
             tokenId=(token_id or "").strip(),
             side=side_val,
             orderType=order_type,
-            price=str(round(float(price), 2)),
+            price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
         result = client.place_order(data, check_approval=False)

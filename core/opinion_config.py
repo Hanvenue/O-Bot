@@ -50,7 +50,9 @@ def get_env_accounts() -> List[Tuple[int, str, str, str, bool]]:
             api_key = _env(f"OPINION_API_KEY_{i}")
             proxy = _env(f"OPINION_PROXY_{i}") or _env(f"OPINION_PROXY{i}")
         if not eoa or not api_key:
-            break
+            if i == 1:
+                break  # 계정 1 없으면 기본 계정 없음 → 기존 동작 유지
+            continue  # 계정 2~N: 빈 슬롯 건너뛰고 계속 탐색
         out.append((i, eoa, api_key, proxy, i == 1))
     return out
 

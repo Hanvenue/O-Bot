@@ -119,12 +119,22 @@ class OpinionAccount:
 class OpinionAccountManager:
     """다중 계정 관리. 디폴트 1개 + PK 로그인으로 추가."""
 
+    _last_env_mtime: float = 0.0
+
     def __init__(self):
         self._accounts: List[OpinionAccount] = []
         self._load()
 
     def _load(self):
-        """.env에 정의된 계정(1,2,3,...) + JSON(PK 로그인)에서 로드."""
+        """.env에 정의된 계정(1,2,3,...) + JSON(PK 로그인)에서 로드. .env mtime 캐시로 재로드 비용 감소."""
+        env_path = _PROJECT_ROOT / ".env"
+        try:
+            mtime = env_path.stat().st_mtime if env_path.exists() else 0.0
+        except OSError:
+            mtime = 0.0
+        if self._accounts and mtime == self._last_env_mtime:
+            return
+        self._last_env_mtime = mtime
         self._accounts = []
         _ensure_env_loaded()
         for account_id, eoa, api_key, proxy, is_default in get_env_accounts():
