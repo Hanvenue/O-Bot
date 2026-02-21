@@ -4,6 +4,7 @@
 """
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import logging
+import re
 from config import Config
 from core.btc_price import btc_price_service
 
@@ -154,6 +155,32 @@ def opinion_btc_up_down():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _opinion_cutoff_seconds(market: dict) -> int | None:
+    """시장 종료 시각(Unix 초). cutoffAt 또는 collection.current.endTime."""
+    cur = market.get("collection") and market.get("collection").get("current")
+    if cur and cur.get("endTime") is not None:
+        try:
+            t = int(float(cur["endTime"]))
+            return t if t < 1e12 else t // 1000
+        except (TypeError, ValueError):
+            pass
+    cutoff = market.get("cutoffAt") or 0
+    try:
+        t = int(float(cutoff))
+        return t if t < 1e12 else t // 1000
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _format_close_kst(cutoff_sec: int) -> str:
+    """종료 시각을 KST(서울) 문자열로. 예: Feb 19, 2026 21:00 KST Close."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    dt = datetime.fromtimestamp(cutoff_sec, tz=ZoneInfo("Asia/Seoul"))
+    return dt.strftime("%b %d, %Y %H:%M KST Close")
+
+
 def _opinion_market_start_timestamp(market: dict) -> int | None:
     """
     Opinion 시장에서 구간 시작 시각(Unix 초) 추출.
@@ -209,10 +236,19 @@ def opinion_btc_price_gap():
         gap = round(current_price - start_price, 2)
         cur = market.get("collection") and market.get("collection").get("current")
         period_label = (cur.get("period") or "").strip() or None if cur else None
+        base_title = market.get('marketTitle') or 'BTC Up or Down - Hourly'
+        # API 제목에 "(... UTC ...)" 괄호가 있으면 제거 후 KST로 대체
+        base_clean = re.sub(r"\s*\([^)]*UTC[^)]*\)\s*$", "", base_title).strip() or base_title
+        close_kst = None
+        cutoff_sec = _opinion_cutoff_seconds(market)
+        if cutoff_sec is not None:
+            close_kst = _format_close_kst(cutoff_sec)
+        market_title_display = f"{base_clean} ({close_kst})" if close_kst else base_clean
         return jsonify({
             'success': True,
             'topicId': topic_id,
-            'marketTitle': market.get('marketTitle') or 'BTC Up or Down - Hourly',
+            'marketTitle': base_title,
+            'marketTitleDisplay': market_title_display,
             'periodLabel': period_label,
             'startPrice': start_price,
             'currentPrice': current_price,
@@ -232,7 +268,7 @@ def opinion_manual_trade_status():
         shares = request.args.get('shares', 10, type=int)
         shares = max(1, min(shares, 1000))
         status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, skip_gap_check=True, shares=shares)
-        if not status.get('ok'):
+        if not status.get('success'):
             return jsonify({'success': False, 'error': status.get('error', '상태 조회 실패')}), 400
         return jsonify({'success': True, **status})
     except Exception as e:
@@ -259,9 +295,15 @@ def opinion_manual_trade_execute():
         except (TypeError, ValueError):
             shares = 10
         shares = max(1, min(shares, 1000))
-        if direction not in ('UP', 'DOWN'):
+        # direction 없으면 서버 추천(trade_direction) 사용. UP/DOWN이 아니면 execute_manual_trade 내부에서 status 기준으로 채움
+        if direction and direction not in ('UP', 'DOWN'):
             return jsonify({'success': False, 'error': 'direction은 UP 또는 DOWN이어야 합니다.'}), 400
-        result = execute_manual_trade(topic_id=topic_id, account_id=account_id, shares=shares, direction=direction)
+        result = execute_manual_trade(
+            topic_id=topic_id,
+            shares=shares,
+            direction=direction or None,
+            maker_account_id=int(account_id) if account_id is not None else None,
+        )
         if result.get('success'):
             return jsonify(result)
         return jsonify(result), 400

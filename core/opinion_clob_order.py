@@ -23,12 +23,16 @@ BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
-    .env: OPINION_CLOB_PK_1, OPINION_MULTISIG_1 / _2 등 (account.id 기준).
+    .env: OPINION_CLOB_PK_{id} 필수. OPINION_MULTISIG_{id} 없으면 account.eoa 사용(EOA와 동일).
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
+    if not pk:
+        return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
-    if not pk or not multi_sig:
+    if not multi_sig and getattr(account, "eoa", None):
+        multi_sig = (account.eoa or "").strip()
+    if not multi_sig:
         return None
     if not multi_sig.startswith("0x"):
         multi_sig = "0x" + multi_sig
@@ -74,26 +78,24 @@ def _get_clob_client(account: OpinionAccount):
     return client
 
 
-def place_limit_order(
+def _place_order_impl(
     account: OpinionAccount,
     market_id: int,
     token_id: str,
     side: str,
     price: float,
     size: int,
+    order_type_name: str,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """
-    LIMIT 주문 (Maker 또는 Taker).
-    - market_id: Opinion marketId (topic_id).
-    - side: "BUY" (SELL은 필요 시 확장).
-    - price: 0.01~0.99.
-    - size: 주문 수량(샤드). makerAmountInQuoteToken = price * size (USDT).
+    내부 공통: LIMIT 또는 MARKET 주문.
+    order_type_name: "LIMIT_ORDER" | "MARKET_ORDER"
     """
     try:
         from opinion_clob_sdk.chain.py_order_utils.model.order import PlaceOrderDataInput
         from opinion_clob_sdk.chain.py_order_utils.model.sides import OrderSide
-        from opinion_clob_sdk.chain.py_order_utils.model.order_type import LIMIT_ORDER
+        from opinion_clob_sdk.chain.py_order_utils.model.order_type import LIMIT_ORDER, MARKET_ORDER
     except ImportError:
         return {
             "success": False,
@@ -106,20 +108,21 @@ def place_limit_order(
     if client is None:
         return {
             "success": False,
-            "error": "CLOB 주문을 위해 해당 계정의 OPINION_CLOB_PK_{id}, OPINION_MULTISIG_{id}를 .env에 설정해 주세요.",
+            "error": "CLOB 주문을 위해 해당 계정의 OPINION_CLOB_PK_{id}를 .env에 설정해 주세요. (MULTISIG 없으면 EOA 사용)",
             "needs_clob": True,
             "order_id": None,
         }
 
     side_val = OrderSide.BUY if (side or "BUY").strip().upper() == "BUY" else OrderSide.SELL
     amount_quote = max(0.01, float(price) * max(1, int(size)))
+    order_type = MARKET_ORDER if order_type_name == "MARKET_ORDER" else LIMIT_ORDER
 
     try:
         data = PlaceOrderDataInput(
             marketId=int(market_id),
             tokenId=(token_id or "").strip(),
             side=side_val,
-            orderType=LIMIT_ORDER,
+            orderType=order_type,
             price=str(round(float(price), 2)),
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
@@ -142,7 +145,7 @@ def place_limit_order(
         return {"success": True, "order_id": str(order_id) if order_id else None, "id": order_id}
     except Exception as e:
         err_msg = str(e)
-        logger.exception("place_limit_order error: %s", err_msg)
+        logger.exception("place order error: %s", err_msg)
         if hasattr(e, "status") and hasattr(e, "body"):
             interpreted = interpret_opinion_api_response(
                 getattr(e, "status", 500),
@@ -151,6 +154,46 @@ def place_limit_order(
             )
             err_msg = interpreted.get("user_message") or err_msg
         return {"success": False, "error": err_msg, "order_id": None}
+
+
+def place_limit_order(
+    account: OpinionAccount,
+    market_id: int,
+    token_id: str,
+    side: str,
+    price: float,
+    size: int,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    LIMIT 주문 (Maker용: 호가창에 걸어 둠).
+    - market_id: Opinion marketId (topic_id).
+    - side: "BUY" (SELL은 필요 시 확장).
+    - price: 0.01~0.99.
+    - size: 주문 수량(샤드). makerAmountInQuoteToken = price * size (USDT).
+    """
+    return _place_order_impl(
+        account, market_id, token_id, side, price, size, "LIMIT_ORDER", **kwargs
+    )
+
+
+def place_market_order(
+    account: OpinionAccount,
+    market_id: int,
+    token_id: str,
+    side: str,
+    price: float,
+    size: int,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    MARKET 주문 (Taker용: 즉시 체결 우선).
+    - 동일 market_id/token_id/price/size. 체결 지연 없이 매칭 엔진이 즉시 처리.
+    - 자전거래 시 Maker LIMIT 직후 Taker를 MARKET로 보내면 반대쪽이 '바로 받아서' 체결될 가능성 확대.
+    """
+    return _place_order_impl(
+        account, market_id, token_id, side, price, size, "MARKET_ORDER", **kwargs
+    )
 
 
 def cancel_order(account: OpinionAccount, order_id: str) -> Dict[str, Any]:
@@ -164,7 +207,7 @@ def cancel_order(account: OpinionAccount, order_id: str) -> Dict[str, Any]:
 
     client = _get_clob_client(account)
     if client is None:
-        return {"success": False, "error": "CLOB 계정 설정 없음 (OPINION_CLOB_PK_*, OPINION_MULTISIG_*)", "needs_clob": True}
+        return {"success": False, "error": "CLOB 계정 설정 없음 (OPINION_CLOB_PK_* 필요)", "needs_clob": True}
 
     try:
         client.cancel_order(order_id)

@@ -4,6 +4,7 @@ API 키는 해당 EOA(디폴트)에서만 사용하도록 매칭.
 """
 import json
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -13,14 +14,28 @@ from core.opinion_config import (
     OPINION_PROXY,
     OPINION_API_KEY,
     OPINION_DEFAULT_EOA,
+    get_env_accounts,
     has_proxy,
 )
 from core.opinion_client import get_positions, get_trades
+from core.opinion_geo import get_country_for_ip
 
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 OPINION_ACCOUNTS_JSON = DATA_DIR / "opinion_accounts.json"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ensure_env_loaded() -> None:
+    """.env를 한 번 더 로드해 최신 값 반영 (로드 순서 이슈 회피)."""
+    env_path = _PROJECT_ROOT / ".env"
+    if env_path.exists():
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(env_path)
+        except Exception as e:
+            logger.debug("_ensure_env_loaded: %s", e)
 
 
 def _normalize_eoa(addr: str) -> str:
@@ -40,6 +55,33 @@ def _eoa_from_pk(private_key: str) -> Optional[str]:
         return acc.address
     except Exception:
         return None
+
+
+def _proxy_display_host(proxy_str: str) -> str:
+    """
+    프록시 문자열에서 IP/호스트만 추출 (UI 표시용).
+    지원 형식: IP:PORT:USER:PASS, USER:PASS@IP:PORT, IP:PORT 등.
+    """
+    s = (proxy_str or "").strip().strip('"\'')
+    if not s:
+        return ""
+    # USER:PASS@IP:PORT → @ 뒤 부분에서 호스트 추출
+    if "@" in s:
+        try:
+            host_part = s.split("@")[-1].strip()
+            return host_part.split(":")[0].strip() or ""
+        except IndexError:
+            pass
+    # IP:PORT 또는 IP:PORT:USER:PASS → 첫 번째 세그먼트
+    parts = s.split(":")
+    for p in parts:
+        p = p.strip().strip('"\'')
+        if not p:
+            continue
+        if p.lower() in ("http", "https", "socks5"):
+            continue
+        return p
+    return ""
 
 
 class OpinionAccount:
@@ -62,11 +104,14 @@ class OpinionAccount:
         self.name = (name or "").strip() or None
 
     def to_dict(self) -> dict:
+        proxy_ip = _proxy_display_host(self.proxy)
+        _, flag_emoji = get_country_for_ip(proxy_ip)
         return {
             "id": self.id,
             "eoa": self.eoa,
             "name": self.name,
-            "proxy_preview": self.proxy.split(":")[0] if self.proxy else "",
+            "proxy_preview": proxy_ip or "—",
+            "flag_emoji": flag_emoji,
             "is_default": self.is_default,
         }
 
@@ -79,17 +124,19 @@ class OpinionAccountManager:
         self._load()
 
     def _load(self):
-        """디폴트 계정 1개 + JSON에 저장된 계정 로드."""
+        """.env에 정의된 계정(1,2,3,...) + JSON(PK 로그인)에서 로드."""
         self._accounts = []
-        # 디폴트 계정 (EOA만 있고 PK는 저장 안 함)
-        if OPINION_DEFAULT_EOA and has_proxy():
+        _ensure_env_loaded()
+        for account_id, eoa, api_key, proxy, is_default in get_env_accounts():
+            name = f"Wallet {account_id:02d}" if account_id <= 99 else f"Wallet {account_id}"
             self._accounts.append(
                 OpinionAccount(
-                    account_id=1,
-                    eoa=_normalize_eoa(OPINION_DEFAULT_EOA),
-                    api_key=OPINION_API_KEY,
-                    proxy=OPINION_PROXY.strip(),
-                    is_default=True,
+                    account_id=account_id,
+                    eoa=_normalize_eoa(eoa),
+                    api_key=api_key,
+                    proxy=proxy,
+                    is_default=is_default,
+                    name=name,
                 )
             )
         if OPINION_ACCOUNTS_JSON.exists():
@@ -99,7 +146,7 @@ class OpinionAccountManager:
                 for item in data.get("accounts", []):
                     aid = int(item.get("id", 0))
                     if any(a.id == aid for a in self._accounts):
-                        continue
+                        continue  # .env에서 이미 로드한 1, 2는 건너뜀
                     self._accounts.append(
                         OpinionAccount(
                             account_id=aid,
@@ -132,6 +179,8 @@ class OpinionAccountManager:
             json.dump({"accounts": to_save}, f, indent=2)
 
     def get_all(self) -> List[OpinionAccount]:
+        """목록 반환 전에 .env/JSON을 다시 읽어 계정 2 프록시 등 최신 반영."""
+        self._load()
         return list(self._accounts)
 
     def get_by_id(self, account_id: int) -> Optional[OpinionAccount]:
@@ -164,9 +213,12 @@ class OpinionAccountManager:
         if not eoa:
             return {"success": False, "error": "유효한 지갑 Private Key가 아닙니다.", "code": "INVALID_PK"}
         eoa = _normalize_eoa(eoa)
-        # API 키: 디폴트 EOA와 같을 때만 하드코딩 API 키 사용
-        api_key = OPINION_API_KEY if eoa.lower() == _normalize_eoa(OPINION_DEFAULT_EOA).lower() else OPINION_API_KEY
-        proxy = OPINION_PROXY.strip()
+        # API 키·프록시: EOA가 .env 어느 계정과 일치하는지 찾고, 없으면 계정 1 사용
+        api_key, proxy = OPINION_API_KEY, OPINION_PROXY.strip()
+        for _id, _eoa, _ak, _px, _ in get_env_accounts():
+            if _eoa and _normalize_eoa(_eoa).lower() == eoa.lower():
+                api_key, proxy = _ak, (_px or "").strip()
+                break
         # positions / trades 호출 (문서: walletAddress는 지갑 주소, API 키는 apikey 헤더)
         pos_res = get_positions(eoa, api_key, proxy)
         trade_res = get_trades(eoa, api_key, proxy)

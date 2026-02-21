@@ -22,6 +22,12 @@ MIN_PRICE_GAP = getattr(Config, 'MIN_PRICE_GAP', 200)
 MIN_BALANCE = getattr(Config, 'MIN_BALANCE', 20)
 TIME_BEFORE_END = getattr(Config, 'TIME_BEFORE_END', 300)
 
+# 실시간 자전거래: 한쪽이 올린 주문을 반대쪽이 바로 받아야 하므로 지연 최소화
+POST_MAKER_DELAY_SEC = getattr(Config, 'POST_MAKER_DELAY_SEC', 0.2)  # Maker 직후 대기 (0.2초, 기존 2초 제거)
+WASH_TRADE_POLL_INTERVAL_SEC = getattr(Config, 'WASH_TRADE_POLL_INTERVAL_SEC', 0.4)  # 체결 폴링 간격
+WASH_TRADE_POLL_TIMEOUT_SEC = getattr(Config, 'WASH_TRADE_POLL_TIMEOUT_SEC', 10)  # 최대 대기
+USE_TAKER_MARKET_ORDER = getattr(Config, 'USE_TAKER_MARKET_ORDER', True)  # Taker를 MARKET로 보내 즉시 체결 시도
+
 
 def _extract_result(data: dict) -> dict:
     """API 응답에서 result 또는 result.data 추출 (시장 상세용)."""
@@ -162,20 +168,30 @@ def get_1h_market_for_trade(
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
     taker_price_down = round(1.0 - maker_price_up, 2)
 
-    # 방향: Maker 유리 = 갭 기준 (현재가 >= 시작가 → UP, 그 외 DOWN). 경봇 validate_market 로직과 동일.
+    # 방향: GAP(시작가 vs 현재가) 기준 — 200달러 이상 상승이면 Maker=UP, 200달러 이상 하락이면 Maker=DOWN
     direction = "UP"
+    gap_usd = None
     start_ts = _market_start_timestamp(market_dict)
     if start_ts is not None:
         start_price = btc_price_service.get_price_at_timestamp(start_ts)
         current_price = btc_price_service.get_current_price()
         if start_price is not None and current_price is not None:
-            direction = "UP" if current_price >= start_price else "DOWN"
+            gap_usd = current_price - start_price
+            if gap_usd >= MIN_PRICE_GAP:
+                direction = "UP"   # 200달러 이상 상승 → UP을 Maker로
+            elif gap_usd <= -MIN_PRICE_GAP:
+                direction = "DOWN"  # 200달러 이상 하락 → DOWN을 Maker로
+            else:
+                # 갭이 200 미만이면 기존처럼 현재가>=시작가 여부로 결정
+                direction = "UP" if current_price >= start_price else "DOWN"
     maker_price = maker_price_up if direction == "UP" else (1.0 - maker_price_up)
     taker_price = round(1.0 - maker_price, 2)
     taker_side = "DOWN" if direction == "UP" else "UP"
 
     out["trade_ready"] = True
     out["trade_direction"] = direction
+    if gap_usd is not None:
+        out["btc_gap_usd"] = round(gap_usd, 2)  # UI에서 "GAP +$200 → Maker UP" 등 표시용
     out["trade_reason"] = f"수동 거래 가능 (Maker {direction} + Taker {taker_side})"
 
     accounts = opinion_account_manager.get_all()
@@ -352,11 +368,18 @@ def _run_wash_trade_via_clob(
     shares: int,
 ) -> Dict[str, Any]:
     """
-    CLOB를 이용한 자전거래: 잔고 확인 → Maker LIMIT → Taker 매칭 → 체결 확인(최대 10초).
-    미체결 시 양쪽 주문 취소 후 "미체결" 에러 반환.
+    CLOB 실시간 자전거래: 잔고 확인 → Maker LIMIT → (최소 대기 0.2초) → Taker MARKET/LIMIT → 체결 폴링.
+    - 한쪽이 올린 주문을 반대쪽이 바로 받지 못하면 실패하므로, Maker 직후 2초 대기를 제거하고
+      POST_MAKER_DELAY_SEC(0.2초)만 둔 뒤 Taker를 즉시 전송. Taker는 기본 MARKET로 즉시 체결 시도.
+    - 미체결 시 양쪽 취소 후 에러 반환.
     """
     try:
-        from core.opinion_clob_order import place_limit_order, cancel_order, get_order_status
+        from core.opinion_clob_order import (
+            place_limit_order,
+            place_market_order,
+            cancel_order,
+            get_order_status,
+        )
     except ImportError:
         return {
             "success": False,
@@ -373,7 +396,7 @@ def _run_wash_trade_via_clob(
     if not ok:
         return {"success": False, "error": err}
 
-    # 1) Maker LIMIT 주문
+    # 1) Maker LIMIT 주문 (호가창에 걸어 둠)
     maker_res = place_limit_order(
         account=maker_account,
         market_id=topic_id,
@@ -393,10 +416,12 @@ def _run_wash_trade_via_clob(
     if not order_id_maker:
         return {"success": False, "error": "Maker 주문 ID를 받지 못했습니다.", "maker_result": maker_res}
 
-    time.sleep(2)
+    # 실시간: Maker 직후 최소 대기만 하고 바로 Taker 전송 (기존 2초 제거 → 0.2초)
+    time.sleep(POST_MAKER_DELAY_SEC)
 
-    # 2) Taker 주문 (Maker 주문 체결시키기 위한 매칭)
-    taker_res = place_limit_order(
+    # 2) Taker 주문 — MARKET로 즉시 체결 시도 (반대쪽이 '바로 받지 못하면 실패' 방지)
+    place_taker = place_market_order if USE_TAKER_MARKET_ORDER else place_limit_order
+    taker_res = place_taker(
         account=taker_account,
         market_id=topic_id,
         token_id=token_taker,
@@ -423,9 +448,9 @@ def _run_wash_trade_via_clob(
             pass
         return {"success": False, "error": "Taker 주문 ID를 받지 못했습니다.", "taker_result": taker_res}
 
-    # 3) 체결 확인 (get_order_status 폴링, 최대 10초)
-    deadline = time.time() + 10
-    interval = 1.5
+    # 3) 체결 확인 (폴링 간격 단축으로 실시간에 가깝게 감지)
+    deadline = time.time() + WASH_TRADE_POLL_TIMEOUT_SEC
+    interval = WASH_TRADE_POLL_INTERVAL_SEC
     maker_filled = False
     taker_filled = False
     while time.time() < deadline:
@@ -456,7 +481,7 @@ def _run_wash_trade_via_clob(
         pass
     return {
         "success": False,
-        "error": "미체결: 10초 내 양쪽 체결되지 않아 주문을 취소했습니다.",
+        "error": f"미체결: {int(WASH_TRADE_POLL_TIMEOUT_SEC)}초 내 양쪽 체결되지 않아 주문을 취소했습니다.",
         "maker_order_id": order_id_maker,
         "taker_order_id": order_id_taker,
     }
