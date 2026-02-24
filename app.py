@@ -87,6 +87,7 @@ from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_manual_trade import get_1h_market_for_trade, execute_manual_trade
 from core.opinion_errors import get_auto_error_message, interpret_opinion_api_response
 from core.opinion_auto_trader import opinion_auto_trader
+from core import opinion_ws_client
 
 
 def _opinion_auth():
@@ -224,7 +225,10 @@ def opinion_btc_price_gap():
     try:
         topic_id, market = get_latest_bitcoin_up_down_market()
         if not topic_id or not market:
-            return jsonify({'success': False, 'error': '1시간 마켓 없음'}), 404
+            return jsonify({
+                'success': False,
+                'error': '1시간 마켓 없음 (Opinion API/프록시 확인: .env의 OPINION_API_KEY, OPINION_PROXY, 서버 로그 journalctl -u obot)',
+            }), 404
         start_ts = _opinion_market_start_timestamp(market)
         if start_ts is None:
             return jsonify({
@@ -616,11 +620,18 @@ if __name__ == '__main__':
     # 오봇 전용 레포: Predict 설정 검증·Telegram 미사용
     logger.info("ℹ️ 오봇(O-Bot) Opinion 전용 모드")
 
-    # Bitcoin 실시간 시세: Pyth Hermes SSE 스트림 백그라운드 시작
+    # Bitcoin 실시간 시세: Pyth Hermes WebSocket 백그라운드 시작
     try:
         btc_price_service.start_stream()
     except Exception as e:
         logger.warning("⚠️ BTC 시세 스트림 미시작 (REST fallback 사용): %s", e)
+
+    # Opinion 오더북 WebSocket (선택, API키 있으면 시작)
+    try:
+        if OPINION_API_KEY:
+            opinion_ws_client.start_ws(OPINION_API_KEY)
+    except Exception as e:
+        logger.warning("⚠️ Opinion WS 미시작 (REST만 사용): %s", e)
 
     port = int(os.getenv('PORT', 5001))
     app.run(

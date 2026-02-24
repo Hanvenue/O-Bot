@@ -121,7 +121,7 @@ def get_orderbook(
     api_key: str,
     proxy_str: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """GET /token/orderbook?token_id=..."""
+    """GET /token/orderbook?token_id=... (REST). 실시간 캐시는 opinion_ws_client.get_cached_orderbook_for_market(market_id) 참고."""
     return _request(
         "GET", "/token/orderbook", api_key, proxy_str, params={"token_id": token_id}
     )
