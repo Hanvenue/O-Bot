@@ -111,7 +111,9 @@ class OpinionAutoTrader:
                 self.last_result = result
 
                 self.total_trades += 1
-                self.last_trade_time = datetime.now()
+                # 쿨다운은 Maker 주문이 실제 제출된 경우에만 적용 (실패 시 즉시 재시도 가능)
+                if result.get("success") or result.get("maker_order_id"):
+                    self.last_trade_time = datetime.now()
 
                 if result.get("success"):
                     self.successful_trades += 1
