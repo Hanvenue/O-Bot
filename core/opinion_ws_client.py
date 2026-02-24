@@ -23,8 +23,13 @@ RECONNECT_DELAY = 5
 
 # 구독 중인 market_id 목록
 _subscribed_ids: Set[int] = set()
+# 연결된 상태에서 즉시 보낼 구독/해제 대기열 (live 전송용)
+_pending_subscribe: Set[int] = set()
+_pending_unsubscribe: Set[int] = set()
 # market_id -> 마지막 수신 메시지(원문) 캐시
 _orderbook_cache: Dict[int, Dict[str, Any]] = {}
+# market_id -> 해당 시장의 token_id 집합 (get_cached_orderbook_for_token용)
+_market_token_ids: Dict[int, Set[str]] = {}
 _cache_lock = threading.Lock()
 _ws_stop = threading.Event()
 _ws_thread: Optional[threading.Thread] = None
@@ -63,9 +68,10 @@ async def _opinion_ws_loop(api_key: str):
                 close_timeout=5,
             ) as ws:
                 logger.info("Opinion WebSocket 연결됨: %s", OPINION_WS_BASE)
-                # 기존 구독 복원
+                # 기존 구독 복원 (재연결 시)
                 with _cache_lock:
                     ids = list(_subscribed_ids)
+                    _pending_subscribe.clear()  # 복원으로 이미 보냄
                 for mid in ids:
                     await ws.send(
                         json.dumps(
@@ -77,6 +83,32 @@ async def _opinion_ws_loop(api_key: str):
                         )
                     )
                 while not _ws_stop.is_set():
+                    # live 구독/해제: 연결된 상태에서 subscribe_orderbook/unsubscribe_orderbook 호출 시 즉시 전송
+                    with _cache_lock:
+                        to_sub = list(_pending_subscribe)
+                        _pending_subscribe.clear()
+                        to_unsub = list(_pending_unsubscribe)
+                        _pending_unsubscribe.clear()
+                    for mid in to_sub:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "action": "SUBSCRIBE",
+                                    "channel": "market.depth.diff",
+                                    "marketId": mid,
+                                }
+                            )
+                        )
+                    for mid in to_unsub:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "action": "UNSUBSCRIBE",
+                                    "channel": "market.depth.diff",
+                                    "marketId": mid,
+                                }
+                            )
+                        )
                     now = time.monotonic()
                     if now - last_heartbeat >= HEARTBEAT_INTERVAL:
                         await ws.send(json.dumps({"action": "HEARTBEAT"}))
@@ -135,28 +167,56 @@ def stop_ws() -> None:
         _ws_thread = None
     with _cache_lock:
         _subscribed_ids.clear()
+        _pending_subscribe.clear()
+        _pending_unsubscribe.clear()
         _orderbook_cache.clear()
+        _market_token_ids.clear()
     logger.info("Opinion WS 스레드 정지됨.")
 
 
-def subscribe_orderbook(market_id: int) -> None:
-    """오더북 변경 구독 (market.depth.diff). 재연결 시 자동으로 구독 복원."""
+def subscribe_orderbook(market_id: int, token_id: Optional[str] = None) -> None:
+    """
+    오더북 변경 구독 (market.depth.diff). 재연결 시 자동 복원.
+    token_id를 주면 market_id↔token_id 매핑에 저장해 get_cached_orderbook_for_token()에서 사용.
+    이미 연결된 상태면 즉시 SUBSCRIBE 메시지 전송.
+    """
+    mid = int(market_id)
     with _cache_lock:
-        _subscribed_ids.add(int(market_id))
+        _subscribed_ids.add(mid)
+        _pending_subscribe.add(mid)
+        if token_id and (tid := (token_id or "").strip()):
+            _market_token_ids.setdefault(mid, set()).add(tid)
 
 
 def unsubscribe_orderbook(market_id: int) -> None:
-    """오더북 구독 해제."""
+    """오더북 구독 해제. 이미 연결된 상태면 즉시 UNSUBSCRIBE 전송."""
+    mid = int(market_id)
     with _cache_lock:
-        _subscribed_ids.discard(int(market_id))
-        _orderbook_cache.pop(int(market_id), None)
+        _subscribed_ids.discard(mid)
+        _pending_unsubscribe.add(mid)
+        _orderbook_cache.pop(mid, None)
+        _market_token_ids.pop(mid, None)
 
 
 def get_cached_orderbook_for_market(market_id: int) -> Optional[Dict[str, Any]]:
     """
     market_id 기준 캐시된 오더북(또는 depth.diff) 메시지 반환.
-    REST get_orderbook(token_id) 시그니처는 변경하지 않음.
     캐시가 없거나 WS 미사용 시 None.
     """
     with _cache_lock:
         return _orderbook_cache.get(int(market_id))
+
+
+def get_cached_orderbook_for_token(token_id: str) -> Optional[Dict[str, Any]]:
+    """
+    token_id에 해당하는 시장의 캐시된 오더북 반환.
+    subscribe_orderbook(market_id, token_id=...)로 매핑을 저장해 둔 경우에만 활용 가능.
+    """
+    tid = (token_id or "").strip()
+    if not tid:
+        return None
+    with _cache_lock:
+        for mid, tokens in _market_token_ids.items():
+            if tid in tokens:
+                return _orderbook_cache.get(mid)
+    return None

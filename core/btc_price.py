@@ -42,8 +42,6 @@ def _parse_pyth_price_from_message(data: dict) -> float | None:
     try:
         # price_update 스타일
         price_feed = data.get("price_feed") or data.get("parsed")
-        if price_feed is None and "parsed" in data:
-            price_feed = data.get("parsed")
         if isinstance(price_feed, list) and price_feed:
             price_info = price_feed[0].get("price") or price_feed[0]
         elif isinstance(price_feed, dict):
