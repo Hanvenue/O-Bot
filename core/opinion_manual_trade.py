@@ -286,9 +286,12 @@ def execute_manual_trade(
     if direction not in ("UP", "DOWN"):
         direction = "UP"
     shares = max(1, int(shares))
-    maker_price = status.get("maker_price") or status.get("maker_price_up") or 0.5
-    if direction == "DOWN" and status.get("maker_price") is None:
-        maker_price = 1.0 - (status.get("maker_price_up") or 0.5)
+    # maker_price_up = YES 기준 best ask - 0.01. 사용자 direction이 status와 다르면 방향에 맞게 재계산.
+    maker_price_up = status.get("maker_price_up") or 0.5
+    if direction == status.get("trade_direction"):
+        maker_price = status.get("maker_price") or maker_price_up
+    else:
+        maker_price = maker_price_up if direction == "UP" else round(1.0 - maker_price_up, 2)
     taker_price = round(1.0 - maker_price, 2)
 
     # CLOB SDK 연동 (미설치/미연동 시 스텁)
