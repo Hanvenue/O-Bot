@@ -25,6 +25,7 @@ class OpinionAutoTrader:
         self.last_trade_time: Optional[datetime] = None
         self.trade_cooldown = 90  # 거래 후 90초 쿨다운
         self.shares_per_trade = 10
+        self.maker_account_id: Optional[int] = None
 
         self.total_trades = 0
         self.successful_trades = 0
@@ -43,6 +44,7 @@ class OpinionAutoTrader:
             return {"success": False, "error": "자동 거래가 이미 실행 중입니다."}
         self.is_running = True
         self.shares_per_trade = max(1, int(shares))
+        self.maker_account_id = account_id
         logger.info("Opinion auto trader started (shares=%s)", self.shares_per_trade)
 
         def run_loop():
@@ -105,7 +107,7 @@ class OpinionAutoTrader:
                     topic_id=topic_id,
                     shares=self.shares_per_trade,
                     direction=None,
-                    maker_account_id=None,
+                    maker_account_id=self.maker_account_id,
                     taker_account_id=None,
                 )
                 self.last_result = result
@@ -157,7 +159,7 @@ class OpinionAutoTrader:
             )
         return {
             "running": self.is_running,
-            "account_id": None,
+            "account_id": self.maker_account_id,
             "last_error": last_err,
             "last_result": self.last_result,
         }
