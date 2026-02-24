@@ -12,7 +12,7 @@
 | **OS** | Ubuntu 22.04 LTS |
 | **플랜** | $10/mo (2GB RAM) |
 | **Static IP** | 18.198.188.126 |
-| **접속 URL** | http://18.198.188.126 |
+| **접속 URL** | https://buykery.duckdns.org |
 
 ---
 
@@ -139,8 +139,8 @@ sudo systemctl restart obot
 ## 보안
 
 - **접근 제어:** Lightsail 방화벽에서 허용 IP만 80포트 오픈 권장
-- **HTTPS:** 도메인 연결 시 Let's Encrypt로 SSL 적용 가능
-- **현재:** IP 화이트리스트로 접근 제한 운영 중
+- **HTTPS:** Let's Encrypt (certbot) 적용 완료 — `buykery.duckdns.org`
+- **자동 갱신:** certbot 크론 등록됨 (90일마다 자동 갱신)
 
 ---
 
