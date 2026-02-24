@@ -279,7 +279,7 @@ def opinion_manual_trade_status():
         topic_id = request.args.get('topic_id', type=int)
         shares = request.args.get('shares', 10, type=int)
         shares = max(1, min(shares, 1000))
-        status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, skip_gap_check=True, shares=shares)
+        status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, shares=shares)
         if not status.get('success'):
             return jsonify({'success': False, 'error': status.get('error', '상태 조회 실패')}), 400
         return jsonify({'success': True, **status})
@@ -615,24 +615,27 @@ def get_btc_price():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-if __name__ == '__main__':
-    import os
-    # 오봇 전용 레포: Predict 설정 검증·Telegram 미사용
-    logger.info("ℹ️ 오봇(O-Bot) Opinion 전용 모드")
-
-    # Bitcoin 실시간 시세: Pyth Hermes WebSocket 백그라운드 시작
+# ---------- WS 백그라운드 시작 (gunicorn·python app.py 공통) ----------
+# if __name__ 블록에만 두면 gunicorn에서 실행되지 않으므로, 모듈 로드 시 한 번만 실행.
+# start_stream/start_ws 내부에서 이미 스레드 alive 체크로 중복 시작 방지.
+def _start_ws_background():
     try:
         btc_price_service.start_stream()
     except Exception as e:
         logger.warning("⚠️ BTC 시세 스트림 미시작 (REST fallback 사용): %s", e)
-
-    # Opinion 오더북 WebSocket (선택, API키 있으면 시작)
     try:
         if OPINION_API_KEY:
             opinion_ws_client.start_ws(OPINION_API_KEY)
     except Exception as e:
         logger.warning("⚠️ Opinion WS 미시작 (REST만 사용): %s", e)
 
+
+_start_ws_background()
+
+
+if __name__ == '__main__':
+    import os
+    logger.info("ℹ️ 오봇(O-Bot) Opinion 전용 모드")
     port = int(os.getenv('PORT', 5001))
     app.run(
         debug=Config.DEBUG,

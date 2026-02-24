@@ -81,7 +81,6 @@ class OpinionAutoTrader:
                 status = get_1h_market_for_trade(
                     topic_id=None,
                     skip_time_check=False,
-                    skip_gap_check=True,
                     shares=self.shares_per_trade,
                 )
 

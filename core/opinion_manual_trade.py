@@ -85,13 +85,13 @@ def _market_start_timestamp(market: dict) -> Optional[int]:
 def get_1h_market_for_trade(
     topic_id: Optional[int] = None,
     skip_time_check: bool = True,
-    skip_gap_check: bool = True,
     shares: int = 10,
 ) -> Dict[str, Any]:
     """
     1시간 마켓(Bitcoin Up or Down) 수동 거래용 상태 반환.
     - 시장 정보, yesTokenId/noTokenId, 호가창 기반 Maker/Taker 가격
     - trade_ready, trade_direction, strategy_preview (shares 기준 계정 1+2 총 거래액)
+    - 갭 기준 방향 결정은 항상 수행됨 (skip_gap_check 파라미터 제거).
     """
     out = {
         "success": False,
@@ -260,7 +260,7 @@ def execute_manual_trade(
     if not has_proxy() or not OPINION_API_KEY:
         return {"success": False, "error": "API 키 또는 프록시를 설정해 주세요."}
 
-    status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, skip_gap_check=True)
+    status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True)
     if not status.get("trade_ready") or not status.get("yes_token_id"):
         return {
             "success": False,
