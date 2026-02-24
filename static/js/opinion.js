@@ -70,6 +70,7 @@ function updateSharesPriceDisplay() {
                 totalEl.textContent = '—';
                 if (window.currentOpinionTradeDirection !== undefined) window.currentOpinionTradeDirection = null;
                 if (window.currentOpinionGapUsd !== undefined) window.currentOpinionGapUsd = null;
+                if (window.currentOpinionMakerAccountId !== undefined) window.currentOpinionMakerAccountId = null;
                 var gapEl = document.getElementById('sharesGapText');
                 if (gapEl) { gapEl.textContent = '—'; gapEl.className = 'gap-value'; }
                 return;
@@ -81,9 +82,10 @@ function updateSharesPriceDisplay() {
             var preview = data.strategy_preview;
             var total = preview && preview.total_investment != null ? preview.total_investment : (shares * 1.0);
             totalEl.textContent = '≈ $' + (typeof total === 'number' ? total.toFixed(2) : total);
-            // GAP / Maker 방향 저장 및 표시 (수동 Go! 시 서버 추천 방향 전달용)
+            // GAP / Maker 방향 / Maker 계정 ID 저장 (수동 Go! 시 서버에 전달)
             window.currentOpinionTradeDirection = data.trade_direction || null;
             window.currentOpinionGapUsd = data.btc_gap_usd != null ? Number(data.btc_gap_usd) : null;
+            window.currentOpinionMakerAccountId = (preview && preview.maker && preview.maker.account_id != null) ? preview.maker.account_id : null;
             var gapEl = document.getElementById('sharesGapText');
             if (gapEl) {
                 if (window.currentOpinionGapUsd != null && data.trade_direction) {
@@ -552,7 +554,7 @@ function runManualGo() {
     var resultEl = document.getElementById('manualTradeResult');
     var body = { shares: shares };
     if (window.currentOpinionTopicId) body.topic_id = window.currentOpinionTopicId;
-    // 서버 추천 방향(GAP 기준) 전달 — 불러오기/Shares 변경 시 갱신된 trade_direction 사용
+    if (window.currentOpinionMakerAccountId != null) body.account_id = window.currentOpinionMakerAccountId;
     if (window.currentOpinionTradeDirection) body.direction = window.currentOpinionTradeDirection;
     fetchWithAuth('/api/opinion/manual-trade/execute', {
         method: 'POST',

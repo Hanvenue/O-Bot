@@ -147,8 +147,16 @@ def opinion_btc_up_down():
         if not api_key:
             return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
         topic_id, market = get_latest_bitcoin_up_down_market()
-        if not topic_id or not market:
+        if not topic_id:
             return jsonify({'success': False, 'error': 'Bitcoin Up or Down 시장을 찾을 수 없습니다.'}), 404
+        if not market:
+            res = get_market(topic_id, api_key, proxy)
+            if res.get('ok') and res.get('data'):
+                market = res.get('data') or {}
+                if isinstance(market, dict) and 'result' in market:
+                    market = market.get('result') or market
+            if not market:
+                return jsonify({'success': False, 'error': 'Bitcoin Up or Down 시장을 찾을 수 없습니다.'}), 404
         return jsonify({'success': True, 'topicId': topic_id, 'result': market})
     except Exception as e:
         logger.exception('btc-up-down error: %s', e)
@@ -314,11 +322,16 @@ def opinion_manual_trade_execute():
 
 @app.route('/api/opinion/auto/start', methods=['POST'])
 def opinion_auto_start():
-    """자동 거래 시작. Body: account_id(선택)."""
+    """자동 거래 시작. Body: shares(기본 10), account_id(선택, 미사용)."""
     try:
         data = request.get_json() or {}
+        shares = data.get('shares', 10)
+        try:
+            shares = max(1, min(1000, int(shares)))
+        except (TypeError, ValueError):
+            shares = 10
         account_id = data.get('account_id')
-        result = opinion_auto_trader.start(account_id=account_id)
+        result = opinion_auto_trader.start(shares=shares, account_id=account_id)
         if result.get('success'):
             return jsonify(result)
         return jsonify(result), 400
@@ -332,7 +345,7 @@ def opinion_auto_stop():
     """자동 거래 중지."""
     try:
         result = opinion_auto_trader.stop()
-        return jsonify(result)
+        return jsonify(result if isinstance(result, dict) else {'success': True})
     except Exception as e:
         logger.exception('opinion auto stop: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -353,7 +366,8 @@ def opinion_auto_status():
 def opinion_auto_error_message():
     """마지막 자동 거래 오류 메시지 (UI용)."""
     try:
-        msg = get_auto_error_message()
+        last = opinion_auto_trader.last_result
+        msg = (last.get("error") if last and isinstance(last, dict) else None) or get_auto_error_message("UNKNOWN")
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         logger.exception('opinion auto error message: %s', e)

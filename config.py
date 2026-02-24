@@ -57,6 +57,9 @@ class Config:
     WASH_TRADE_POLL_INTERVAL_SEC = float(os.getenv('WASH_TRADE_POLL_INTERVAL_SEC', '0.4'))  # 체결 폴링 간격
     WASH_TRADE_POLL_TIMEOUT_SEC = float(os.getenv('WASH_TRADE_POLL_TIMEOUT_SEC', '10'))  # 미체결 시 취소까지 대기
     USE_TAKER_MARKET_ORDER = os.getenv('USE_TAKER_MARKET_ORDER', 'true').lower() in ('1', 'true', 'yes')  # Taker MARKET 주문 사용
+
+    # 잔고 조회 실패 시에도 진행 (BSC/OKX 접속 불가 시 .env에 SKIP_BALANCE_CHECK=1 설정)
+    SKIP_BALANCE_CHECK = os.getenv('SKIP_BALANCE_CHECK', '').strip().lower() in ('1', 'true', 'yes')
     
     # Telegram Bot
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')

@@ -13,7 +13,7 @@ from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_client import get_market, get_orderbook
 from core.opinion_account import opinion_account_manager, OpinionAccount
 from core.btc_price import btc_price_service
-from core.okx_balance import get_usdt_balance_for_address
+from core.okx_balance import get_usdt_balance_with_reason
 
 logger = logging.getLogger(__name__)
 
@@ -337,17 +337,28 @@ def _check_balance_for_wash_trade(
     Maker 필요: maker_price * shares (USDT)
     Taker 필요: taker_price * shares * 1.002 (수수료 0.2% 포함)
     부족 시 (False, "계정 N: OO USDT 부족" 형태 메시지) 반환.
+    SKIP_BALANCE_CHECK=True면 조회 생략하고 통과.
     """
+    skip = getattr(Config, "SKIP_BALANCE_CHECK", False)
+    if skip:
+        return True, None
+
     maker_need = maker_price * shares
     taker_need = taker_price * shares * 1.002
     proxy_maker = get_proxy_dict(maker_account.proxy or "") if maker_account.proxy else None
     proxy_taker = get_proxy_dict(taker_account.proxy or "") if taker_account.proxy else None
-    bal_maker = get_usdt_balance_for_address(maker_account.eoa, proxy_maker)
-    bal_taker = get_usdt_balance_for_address(taker_account.eoa, proxy_taker)
+
+    bal_maker, reason_maker = get_usdt_balance_with_reason(maker_account.eoa, proxy_maker)
+    if bal_maker is None and proxy_maker is not None:
+        bal_maker, reason_maker = get_usdt_balance_with_reason(maker_account.eoa, None)
     if bal_maker is None:
-        return False, "Maker 계정 잔고를 조회할 수 없습니다."
+        return False, f"Maker 계정 잔고 조회 실패: {reason_maker or '알 수 없음'}. (필요 시 .env에 SKIP_BALANCE_CHECK=1)"
+
+    bal_taker, reason_taker = get_usdt_balance_with_reason(taker_account.eoa, proxy_taker)
+    if bal_taker is None and proxy_taker is not None:
+        bal_taker, reason_taker = get_usdt_balance_with_reason(taker_account.eoa, None)
     if bal_taker is None:
-        return False, "Taker 계정 잔고를 조회할 수 없습니다."
+        return False, f"Taker 계정 잔고 조회 실패: {reason_taker or '알 수 없음'}. (필요 시 .env에 SKIP_BALANCE_CHECK=1)"
     if bal_maker < maker_need:
         short = round(maker_need - bal_maker, 2)
         return False, f"Maker 계정(Wallet {maker_account.id}) 잔고 부족: {short} USDT 필요 (보유: {round(bal_maker, 2)} USDT)"

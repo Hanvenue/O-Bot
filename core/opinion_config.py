@@ -58,10 +58,34 @@ def get_env_accounts() -> List[Tuple[int, str, str, str, bool]]:
 
 
 def get_proxy_dict(proxy_str: str):
-    """프록시 문자열(IP:PORT:USER:PASS) → requests용 dict. 형식 오류 시 None."""
-    if not proxy_str or ":" not in proxy_str:
+    """
+    프록시 문자열 → requests용 dict.
+    지원 형식: IP:PORT:USER:PASS, USER:PASS@IP:PORT, IP:PORT(인증 없음).
+    """
+    s = (proxy_str or "").strip().strip('"\'')
+    if not s or ":" not in s:
         return None
-    parts = proxy_str.strip().split(":")
+    # USER:PASS@IP:PORT
+    if "@" in s:
+        try:
+            user_pass, host_port = s.split("@", 1)
+            user_pass = user_pass.strip()
+            host_port = host_port.strip()
+            if ":" in user_pass and ":" in host_port:
+                url = f"http://{user_pass}@{host_port}"
+                return {"http": url, "https": url}
+        except (ValueError, IndexError):
+            pass
+        return None
+    parts = s.split(":")
+    # IP:PORT (인증 없음, 2부분)
+    if len(parts) == 2:
+        ip, port = parts[0].strip(), parts[1].strip()
+        if ip and port:
+            url = f"http://{ip}:{port}"
+            return {"http": url, "https": url}
+        return None
+    # IP:PORT:USER:PASS (정확히 4부분)
     if len(parts) != 4:
         return None
     ip, port, user, password = parts

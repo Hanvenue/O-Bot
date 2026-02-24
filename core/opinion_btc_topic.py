@@ -18,12 +18,21 @@ _btc_patterns = ("bitcoin up or down", "btc up or down")
 
 
 def _extract_list(data: dict) -> list:
-    """API 응답에서 market list 추출. errno/result 또는 code/result 형식 대응."""
+    """API 응답에서 market list 추출. result.list / data(배열) / result 형식 대응."""
+    if not data:
+        return []
+    # result.list (기존 형식)
     r = data.get("result") or data
     if isinstance(r, dict) and "list" in r:
-        return r.get("list") or []
+        lst = r.get("list")
+        if isinstance(lst, list):
+            return lst
     if isinstance(r, list):
         return r
+    # data가 배열인 경우 (일부 API 응답)
+    d = data.get("data")
+    if isinstance(d, list):
+        return d
     return []
 
 
