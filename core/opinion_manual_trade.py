@@ -86,12 +86,14 @@ def get_1h_market_for_trade(
     topic_id: Optional[int] = None,
     skip_time_check: bool = True,
     shares: int = 10,
+    direction_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     1시간 마켓(Bitcoin Up or Down) 수동 거래용 상태 반환.
     - 시장 정보, yesTokenId/noTokenId, 호가창 기반 Maker/Taker 가격
     - trade_ready, trade_direction, strategy_preview (shares 기준 계정 1+2 총 거래액)
     - 갭 기준 방향 결정은 항상 수행됨 (skip_gap_check 파라미터 제거).
+    - direction_override가 UP/DOWN이면 BTC 가격 없이도 해당 방향으로 trade_ready 반환(수동 지정 시).
     """
     out = {
         "success": False,
@@ -169,21 +171,26 @@ def get_1h_market_for_trade(
     taker_price_down = round(1.0 - maker_price_up, 2)
 
     # 방향: GAP(시작가 vs 현재가) 기준 — 200달러 이상 상승이면 Maker=UP, 200달러 이상 하락이면 Maker=DOWN
+    # direction_override가 UP/DOWN이면 수동 지정이므로 BTC 가격 없어도 해당 방향 사용
     direction = "UP"
     gap_usd = None
+    use_override = (direction_override or "").strip().upper() in ("UP", "DOWN")
     start_ts = _market_start_timestamp(market_dict)
-    if start_ts is not None:
+    if use_override:
+        direction = (direction_override or "").strip().upper()
+    elif start_ts is not None:
         start_price = btc_price_service.get_price_at_timestamp(start_ts)
         current_price = btc_price_service.get_current_price()
-        if start_price is not None and current_price is not None:
-            gap_usd = current_price - start_price
-            if gap_usd >= MIN_PRICE_GAP:
-                direction = "UP"   # 200달러 이상 상승 → UP을 Maker로
-            elif gap_usd <= -MIN_PRICE_GAP:
-                direction = "DOWN"  # 200달러 이상 하락 → DOWN을 Maker로
-            else:
-                # 갭이 200 미만이면 기존처럼 현재가>=시작가 여부로 결정
-                direction = "UP" if current_price >= start_price else "DOWN"
+        if start_price is None or current_price is None:
+            out["trade_reason"] = "BTC 가격을 가져올 수 없어 방향 판단 불가 - 거래 건너뜀"
+            return out
+        gap_usd = current_price - start_price
+        if gap_usd >= MIN_PRICE_GAP:
+            direction = "UP"   # 200달러 이상 상승 → UP을 Maker로
+        elif gap_usd <= -MIN_PRICE_GAP:
+            direction = "DOWN"  # 200달러 이상 하락 → DOWN을 Maker로
+        else:
+            direction = "UP" if current_price >= start_price else "DOWN"
     maker_price = maker_price_up if direction == "UP" else (1.0 - maker_price_up)
     taker_price = round(1.0 - maker_price, 2)
     taker_side = "DOWN" if direction == "UP" else "UP"
@@ -260,7 +267,12 @@ def execute_manual_trade(
     if not has_proxy() or not OPINION_API_KEY:
         return {"success": False, "error": "API 키 또는 프록시를 설정해 주세요."}
 
-    status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True)
+    _dir_override = (direction or "").strip().upper()
+    status = get_1h_market_for_trade(
+        topic_id=topic_id,
+        skip_time_check=True,
+        direction_override=_dir_override if _dir_override in ("UP", "DOWN") else None,
+    )
     if not status.get("trade_ready") or not status.get("yes_token_id"):
         return {
             "success": False,
