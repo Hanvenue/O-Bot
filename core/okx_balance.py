@@ -81,8 +81,8 @@ def _fetch_usdt_via_okx(address: str, proxies: Optional[dict] = None) -> Optiona
                         total_usdt += float(asset.get("balance") or 0)
                     except (TypeError, ValueError):
                         pass
-        # 0 USDT도 유효한 잔고이므로 0.0 반환 (None이면 "조회할 수 없습니다"로 오인됨)
-        return total_usdt
+        # 0 USDT도 유효한 잔고이므로 0.0 반환 (total_usdt is not None 일 때만)
+        return total_usdt if total_usdt is not None else None
     except Exception as e:
         logger.warning("OKX balance fetch failed for %s: %s", address[:10], e)
         return None
@@ -112,7 +112,7 @@ def _fetch_usdt_via_bsc_rpc(address: str, proxies: Optional[dict] = None) -> Opt
         ],
     }
     try:
-        r = requests.post(BSC_RPC_URL, json=payload, proxies=proxies or {}, timeout=10)
+        r = requests.post(BSC_RPC_URL, json=payload, proxies={}, timeout=10)
         r.raise_for_status()
         data = r.json()
         result = data.get("result")
@@ -244,7 +244,7 @@ def _fetch_usdt_via_bsc_rpc_with_reason(address: str, proxies: Optional[dict] = 
         ],
     }
     try:
-        r = requests.post(BSC_RPC_URL, json=payload, proxies=proxies or {}, timeout=10)
+        r = requests.post(BSC_RPC_URL, json=payload, proxies={}, timeout=10)
         r.raise_for_status()
         data = r.json()
         result = data.get("result")
