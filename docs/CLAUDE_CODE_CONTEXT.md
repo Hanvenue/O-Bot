@@ -21,6 +21,7 @@
 | **static/** | `opinion.js`, `style.css`, `images/` 유지. |
 | **폴더 구조** | **`오봇` 하위 폴더 제거.** 루트 = 프로젝트 전체. 규칙·문서는 루트 `.cursorrules`, 루트 `docs/` 에만 있음. |
 | **설정** | `config.py`는 유지하되 오봇에서 `Config.validate()` 호출 안 함. `.env.example` 은 Opinion·Flask·Pyth 위주로 정리. |
+| **배포 환경** | AWS Lightsail (프랑크푸르트, 2GB). gunicorn + nginx + systemd. Static IP: `18.198.188.126`. 자동 거래 포함 전체 기능 동작. 상세: `LIGHTSAIL_DEPLOY.md` |
 
 ---
 
@@ -39,7 +40,7 @@
 ├── static/             # js/opinion.js, css/style.css, images/
 ├── docs/               # 문서 + .pdca-snapshots 등
 ├── .cursorrules        # 오봇 프로젝트 규칙
-└── (기타) README.md, VERCEL_DEPLOY.md, .env.example 등
+└── (기타) README.md, VERCEL_DEPLOY.md, LIGHTSAIL_DEPLOY.md, .env.example 등
 ```
 
 ---
