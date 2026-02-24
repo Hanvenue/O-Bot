@@ -29,9 +29,12 @@
 ## 3. 기본 주소와 인증
 
 - **API 기본 주소**: `https://proxy.opinion.trade:8443/openapi`
-- **인증**: 요청할 때 **API 키**를 헤더에 넣어야 함  
+- **인증**: 요청할 때 **API 키**만 헤더에 넣으면 됨  
   - 헤더 이름: `apikey`  
-  - 값: 발급받은 API 키
+  - 값: 발급받은 API 키  
+  - **지갑 주소(EOA)는 헤더에 넣지 않음.**  
+    - 포지션/거래 조회(`/positions/user/{walletAddress}`, `/trade/user/{walletAddress}`)에서는 **URL 경로**에 지갑 주소가 들어감.  
+    - 나머지 엔드포인트(시장 목록, 호가창 등)는 지갑 주소 없이 API 키만으로 호출.
 
 **API 키 받는 방법**:  
 [신청 폼](https://docs.google.com/forms/d/1h7gp8UffZeXzYQ-lv4jcou9PoRNOqMAQhyW4IwZDnII) 작성 후 발급  

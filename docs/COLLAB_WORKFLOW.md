@@ -4,6 +4,13 @@
 
 ---
 
+## 0. 작업 범위 (필수)
+
+- **O-Bot 레포/프로젝트에서만 작업합니다.** .env, 코드, 문서 등 모든 변경은 O-Bot 폴더 내에서만 수행.
+- **경봇(gyeong-bot)에는 절대 수정·추가하지 않습니다.** 다른 에이전트(Claude Code 포함)도 동일하게 적용.
+
+---
+
 ## 1. 역할 분담
 
 | 도구 | 담당 |
@@ -20,7 +27,19 @@
 - **항상 브랜치에서 작업:** 새 작업은 `main`(또는 기본 브랜치)에서 분기한 브랜치에서 진행합니다.
 - **작업 브랜치명 명시:** Cursor가 작업을 마치면, 완료 요약에 **현재 작업 브랜치명**을 반드시 적습니다.  
   → 사용자가 Claude에게 *"Cursor로 작업한 최신 브랜치에서 diff만 보고 리뷰/PR 해 줘"*라고 요청할 수 있게 합니다.
-- **최근 작업 브랜치:** `feat/opinion-manual-trade` (오봇 수동 거래 기능, 1시간 마켓 자전거래).
+- **최근 작업 브랜치:** `feat/clob-sdk-integration` (CLOB SDK 연동), `claude/setup-lightsail-instance-OwmhF` (Lightsail 배포 설정).
+
+---
+
+## 2-1. 배포 환경 (Lightsail)
+
+- **배포:** AWS Lightsail (Ubuntu 22.04, systemd + gunicorn + nginx). 자동 거래 포함 전체 기능 동작.
+- **상세:** `docs/LIGHTSAIL_DEPLOY.md` 참고.
+- **서버 코드 반영 절차:**
+  1. 서버에서 `git pull origin main`
+  2. `sudo systemctl restart obot`
+
+코드 수정 후 서버 업데이트는 위 두 단계로 진행합니다.
 
 ---
 

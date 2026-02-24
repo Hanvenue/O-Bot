@@ -68,6 +68,11 @@ function updateSharesPriceDisplay() {
             if (up == null) {
                 ratioEl.innerHTML = '— : —';
                 totalEl.textContent = '—';
+                if (window.currentOpinionTradeDirection !== undefined) window.currentOpinionTradeDirection = null;
+                if (window.currentOpinionGapUsd !== undefined) window.currentOpinionGapUsd = null;
+                if (window.currentOpinionMakerAccountId !== undefined) window.currentOpinionMakerAccountId = null;
+                var gapEl = document.getElementById('sharesGapText');
+                if (gapEl) { gapEl.textContent = '—'; gapEl.className = 'gap-value'; }
                 return;
             }
             var down = 1 - up;
@@ -77,6 +82,21 @@ function updateSharesPriceDisplay() {
             var preview = data.strategy_preview;
             var total = preview && preview.total_investment != null ? preview.total_investment : (shares * 1.0);
             totalEl.textContent = '≈ $' + (typeof total === 'number' ? total.toFixed(2) : total);
+            // GAP / Maker 방향 / Maker 계정 ID 저장 (수동 Go! 시 서버에 전달)
+            window.currentOpinionTradeDirection = data.trade_direction || null;
+            window.currentOpinionGapUsd = data.btc_gap_usd != null ? Number(data.btc_gap_usd) : null;
+            window.currentOpinionMakerAccountId = (preview && preview.maker && preview.maker.account_id != null) ? preview.maker.account_id : null;
+            var gapEl = document.getElementById('sharesGapText');
+            if (gapEl) {
+                if (window.currentOpinionGapUsd != null && data.trade_direction) {
+                    var gapStr = window.currentOpinionGapUsd >= 0 ? '+' + window.currentOpinionGapUsd.toFixed(0) : window.currentOpinionGapUsd.toFixed(0);
+                    gapEl.textContent = '$' + gapStr + ' → Maker ' + data.trade_direction;
+                    gapEl.className = 'gap-value ' + (data.trade_direction === 'UP' ? 'gap-up' : 'gap-down');
+                } else {
+                    gapEl.textContent = data.trade_direction ? 'Maker ' + data.trade_direction : '—';
+                    gapEl.className = 'gap-value';
+                }
+            }
         })
         .catch(function () {
             ratioEl.innerHTML = '— : —';
@@ -130,11 +150,12 @@ function renderAccounts(accounts) {
         const defaultBadge = a.is_default ? '<span class="badge-default">Wallet 01</span>' : '';
         const eoaShort = (a.eoa || '').slice(0, 10) + '...' + (a.eoa || '').slice(-8);
         const displayName = a.name ? (a.name + ' (' + eoaShort + ')') : eoaShort;
+        const flag = (a.flag_emoji || '').trim() ? '<span class="account-flag" title="프록시 국가">' + a.flag_emoji + '</span>' : '';
         return (
             '<div class="opinion-account-card">' +
             '<span class="account-id">#' + a.id + '</span>' +
             '<div><span class="account-name">' + displayName + '</span> ' + defaultBadge + '</div>' +
-            '<span style="font-size:0.8rem;color:#666">' + (a.proxy_preview || '') + '</span>' +
+            '<span class="account-proxy-cell">' + flag + (flag && a.proxy_preview ? ' ' : '') + '<span class="proxy-preview">' + (a.proxy_preview || '') + '</span></span>' +
             '</div>'
         );
     }).join('');
@@ -244,7 +265,7 @@ function renderBtcUpDownCard(data) {
     wrap.classList.remove('api-result-box');
     var m = data.result || {};
     var topicId = data.topicId || m.marketId || '-';
-    var title = m.marketTitle || '-';
+    var title = data.marketTitleDisplay || m.marketTitle || '-';
     var thumb = (m.thumbnailUrl || '').trim();
     var vol = m.volume != null ? String(m.volume) : '-';
     // 1시간 구간: collection.current.startTime/endTime 우선, 없으면 종료 1시간 전을 시작으로 표시
@@ -328,7 +349,7 @@ function updateBtcPriceGapCard() {
                 if (placeholder) placeholder.style.display = 'none';
                 if (errEl) errEl.style.display = 'none';
                 card.style.display = 'block';
-                if (nameEl) nameEl.textContent = data.marketTitle || 'BTC Up or Down - Hourly';
+                if (nameEl) nameEl.textContent = data.marketTitleDisplay || data.marketTitle || 'BTC Up or Down - Hourly';
                 if (startEl) startEl.textContent = '$' + (data.startPrice != null ? Number(data.startPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
                 if (currentEl) currentEl.textContent = '$' + (data.currentPrice != null ? Number(data.currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
                 var gap = data.gap != null ? Number(data.gap) : null;
@@ -533,6 +554,8 @@ function runManualGo() {
     var resultEl = document.getElementById('manualTradeResult');
     var body = { shares: shares };
     if (window.currentOpinionTopicId) body.topic_id = window.currentOpinionTopicId;
+    if (window.currentOpinionMakerAccountId != null) body.account_id = window.currentOpinionMakerAccountId;
+    if (window.currentOpinionTradeDirection) body.direction = window.currentOpinionTradeDirection;
     fetchWithAuth('/api/opinion/manual-trade/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

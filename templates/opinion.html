@@ -23,7 +23,7 @@
         .login-result-card { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 16px; border-radius: 8px; margin-top: 16px; }
         .opinion-account-card {
             display: grid;
-            grid-template-columns: 50px 1fr 80px;
+            grid-template-columns: 50px 1fr 100px;
             align-items: center;
             padding: 16px 20px;
             background: #f8f9fa;
@@ -32,6 +32,9 @@
         }
         .opinion-account-card .eoa { font-family: monospace; font-size: 0.9rem; word-break: break-all; }
         .opinion-account-card .badge-default { background: #667eea; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px; }
+        .opinion-account-card .account-proxy-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 0.8rem; color: #666; }
+        .opinion-account-card .account-flag { font-size: 1.25rem; line-height: 1; }
+        .opinion-account-card .proxy-preview { font-family: monospace; font-size: 0.75rem; }
         .opinion-data-section { margin-top: 32px; }
         .opinion-actions { margin-bottom: 16px; }
         .api-result-box { background: #f5f5f5; padding: 12px; border-radius: 8px; font-size: 0.85rem; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
@@ -75,6 +78,10 @@
         .shares-price-card .label { font-size: 0.75rem; color: #5a6c9a; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 4px; }
         .shares-price-ratio .ratio-value { font-size: 1.25rem; font-weight: 700; color: #333; }
         .shares-price-ratio .ratio-value .up { color: #28a745; }
+        .shares-gap-direction .label { font-size: 0.75rem; color: #5a6c9a; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 4px; }
+        .shares-gap-direction .gap-value { font-size: 1rem; font-weight: 600; color: #333; }
+        .shares-gap-direction .gap-value.gap-up { color: #28a745; }
+        .shares-gap-direction .gap-value.gap-down { color: #dc3545; }
         .shares-price-ratio .ratio-value .down { color: #dc3545; }
         .shares-price-total .total-value { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; }
         .auto-inline { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -236,6 +243,10 @@
                     <div class="shares-price-total">
                         <span class="label">예상 거래액 (계정 1+2 총액)</span>
                         <span id="sharesPriceTotal" class="total-value">—</span>
+                    </div>
+                    <div class="shares-gap-direction" id="sharesGapDirection" title="시작가 대비 현재 BTC 가격 차이. 200달러 이상 상승 시 Maker=UP, 200달러 이상 하락 시 Maker=DOWN">
+                        <span class="label">GAP → Maker</span>
+                        <span id="sharesGapText" class="gap-value">—</span>
                     </div>
                 </div>
             </div>
