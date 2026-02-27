@@ -205,16 +205,17 @@ def get_1h_market_for_trade(
             logger.info("start_price 폴백: Benchmarks 실패(ts=%s), 현재가 사용", start_ts)
             start_price = btc_price_service.get_current_price()
         current_price = btc_price_service.get_current_price()
-        if start_price is None or current_price is None:
-            out["trade_reason"] = "BTC 가격을 가져올 수 없어 방향 판단 불가 - 거래 건너뜀"
-            return out
-        gap_usd = current_price - start_price
-        if gap_usd >= MIN_PRICE_GAP:
-            direction = "UP"   # 200달러 이상 상승 → UP을 Maker로
-        elif gap_usd <= -MIN_PRICE_GAP:
-            direction = "DOWN"  # 200달러 이상 하락 → DOWN을 Maker로
+        if start_price is not None and current_price is not None:
+            gap_usd = current_price - start_price
+            if gap_usd >= MIN_PRICE_GAP:
+                direction = "UP"   # 200달러 이상 상승 → UP을 Maker로
+            elif gap_usd <= -MIN_PRICE_GAP:
+                direction = "DOWN"  # 200달러 이상 하락 → DOWN을 Maker로
+            else:
+                direction = "UP" if current_price >= start_price else "DOWN"
         else:
-            direction = "UP" if current_price >= start_price else "DOWN"
+            # BTC 가격 미사용 시에도 UI는 호가창 기준 UP/DOWN·예상 거래액 표시 (방향은 기본 UP)
+            logger.info("BTC 가격 없음 → 방향 기본 UP, GAP 미표시 (호가창·예상 거래액은 표시)")
     maker_price = maker_price_up if direction == "UP" else (1.0 - maker_price_up)
     taker_price = round(1.0 - maker_price, 2)
     taker_side = "DOWN" if direction == "UP" else "UP"
