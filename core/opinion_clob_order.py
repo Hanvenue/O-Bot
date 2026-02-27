@@ -26,8 +26,8 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
     .env: OPINION_CLOB_PK_{id} 필수.
-    OPINION_MULTISIG_{id}: Gnosis Safe 컨트랙트 주소(EOA 아님). 미설정 시 CLOB PK 파생 EOA 사용.
-    에러 10603 시: .env에 OPINION_MULTISIG_{id}=<Safe 주소> 설정 또는 app.opinion.trade에서 같은 지갑 연결.
+    OPINION_MULTISIG_{id}: Opinion.trade Gnosis Safe 컨트랙트 주소(EOA 아님). 미설정 시 CLOB PK 파생 EOA 사용.
+    에러 10603 시: .env에 OPINION_MULTISIG_{id}=<Safe 주소> 또는 app.opinion.trade에서 같은 지갑 연결. (docs/OPINION_ERROR_10603.md)
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
@@ -41,6 +41,11 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         except Exception as e:
             logger.warning("CLOB PK에서 EOA 파생 실패, account.eoa 폴백: %s", e)
             multi_sig = (getattr(account, "eoa", None) or "").strip()
+        if multi_sig:
+            logger.warning(
+                "계정 %s: OPINION_MULTISIG_%s 미설정 → CLOB PK 파생 EOA 사용. 에러 10603 시 docs/OPINION_ERROR_10603.md 참고.",
+                aid, aid,
+            )
     if not multi_sig:
         return None
     if not multi_sig.startswith("0x"):
@@ -147,7 +152,7 @@ def _place_order_impl(
             price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
-        # check_approval=True: SDK가 enable_trading() 자동 실행 → Opinion 프록시 지갑 등록 (10603 방지)
+        # check_approval=True: SDK가 enable_trading() 자동 실행 → USDT 사용 승인 트랜잭션
         result = client.place_order(data, check_approval=True)
         order_id = None
         if hasattr(result, "result") and hasattr(result.result, "data"):
@@ -168,7 +173,12 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
-        if hasattr(e, "status") and hasattr(e, "body"):
+        if "10603" in err_msg:
+            err_msg = (
+                "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
+                "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
+            )
+        elif hasattr(e, "status") and hasattr(e, "body"):
             body = getattr(e, "body", None)
             if isinstance(body, dict):
                 interpreted = interpret_opinion_api_response(
@@ -177,17 +187,6 @@ def _place_order_impl(
                     context="CLOB 주문",
                 )
                 err_msg = interpreted.get("user_message") or err_msg
-            else:
-                if "10603" in err_msg or (body and "10603" in str(body)):
-                    err_msg = (
-                        "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
-                        "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
-                    )
-        elif "10603" in err_msg:
-            err_msg = (
-                "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
-                "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
-            )
         return {"success": False, "error": err_msg, "order_id": None}
 
 
