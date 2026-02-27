@@ -149,6 +149,69 @@ def _get_clob_client(account: OpinionAccount):
     return client
 
 
+def _extract_order_id(result: Any) -> Optional[str]:
+    """
+    place_order 응답에서 order_id 추출. SDK 버전별 응답 구조 차이를 모두 커버.
+    못 찾으면 None 반환 (호출부에서 로그/에러 처리).
+    """
+    # 1) dict 타입
+    if isinstance(result, dict):
+        for k in ("order_id", "orderId", "id"):
+            v = result.get(k)
+            if v:
+                return str(v)
+        # 중첩 data/result 키
+        for k in ("data", "result"):
+            inner = result.get(k)
+            if isinstance(inner, dict):
+                for ik in ("order_id", "orderId", "id"):
+                    v = inner.get(ik)
+                    if v:
+                        return str(v)
+
+    # 2) 객체 타입 — 직속 속성
+    for attr in ("order_id", "orderId", "id"):
+        v = getattr(result, attr, None)
+        if v:
+            return str(v)
+
+    # 3) result.result.data 체인
+    r = getattr(result, "result", None)
+    if r is not None:
+        for attr in ("order_id", "orderId", "id"):
+            v = getattr(r, attr, None)
+            if v:
+                return str(v)
+        d = getattr(r, "data", None)
+        if d is not None:
+            if isinstance(d, dict):
+                for k in ("order_id", "orderId", "id"):
+                    v = d.get(k)
+                    if v:
+                        return str(v)
+            else:
+                for attr in ("order_id", "orderId", "id"):
+                    v = getattr(d, attr, None)
+                    if v:
+                        return str(v)
+
+    # 4) result.data 직접
+    d = getattr(result, "data", None)
+    if d is not None:
+        if isinstance(d, dict):
+            for k in ("order_id", "orderId", "id"):
+                v = d.get(k)
+                if v:
+                    return str(v)
+        else:
+            for attr in ("order_id", "orderId", "id"):
+                v = getattr(d, attr, None)
+                if v:
+                    return str(v)
+
+    return None
+
+
 def _place_order_impl(
     account: OpinionAccount,
     market_id: int,
@@ -203,21 +266,10 @@ def _place_order_impl(
         proxy_str = (proxy_dict.get("https") or proxy_dict.get("http")) if proxy_dict else None
         with _proxy_env(proxy_str):
             result = client.place_order(data, check_approval=False)
-        order_id = None
-        if hasattr(result, "result") and hasattr(result.result, "data"):
-            data_obj = result.result.data
-            if hasattr(data_obj, "order_id"):
-                order_id = getattr(data_obj, "order_id", None)
-            if order_id is None and hasattr(data_obj, "id"):
-                order_id = getattr(data_obj, "id", None)
-        if order_id is None and hasattr(result, "result"):
-            r = result.result
-            if hasattr(r, "order_id"):
-                order_id = r.order_id
-            elif isinstance(getattr(r, "data", None), dict):
-                order_id = (r.data or {}).get("order_id") or (r.data or {}).get("id")
-        if order_id is None and isinstance(result, dict):
-            order_id = result.get("order_id") or result.get("id")
+        # 응답 구조 확인용 로그 (order_id 파싱 실패 시 진단)
+        logger.info("place_order raw result type=%s repr=%s", type(result).__name__, repr(result)[:300])
+
+        order_id = _extract_order_id(result)
         return {"success": True, "order_id": str(order_id) if order_id else None, "id": order_id}
     except Exception as e:
         err_msg = str(e)
