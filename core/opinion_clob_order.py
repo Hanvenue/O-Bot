@@ -145,7 +145,8 @@ def _place_order_impl(
             price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
-        result = client.place_order(data, check_approval=False)
+        # check_approval=True: SDK가 enable_trading() 자동 실행 → Opinion 프록시 지갑 등록 (10603 방지)
+        result = client.place_order(data, check_approval=True)
         order_id = None
         if hasattr(result, "result") and hasattr(result.result, "data"):
             data_obj = result.result.data
