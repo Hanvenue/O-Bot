@@ -549,17 +549,27 @@ def opinion_token_latest_price():
 
 @app.route('/api/opinion/token/orderbook')
 def opinion_token_orderbook():
-    """토큰 호가창. Query: token_id"""
+    """토큰 호가창. Query: token_id, market_id(선택 — WS 캐시 우선)"""
     api_key, proxy = _opinion_auth()
     if not api_key:
         return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
     token_id = request.args.get('token_id', '').strip()
     if not token_id:
         return jsonify({'success': False, 'error': 'token_id 필요'}), 400
+    # WS 캐시 우선: market_id가 있으면 누적 오더북 스냅샷 반환
+    market_id_raw = request.args.get('market_id', '').strip()
+    if market_id_raw:
+        try:
+            ws_data = opinion_ws_client.get_full_orderbook_snapshot(int(market_id_raw))
+            if ws_data:
+                return jsonify({'success': True, 'result': ws_data, 'source': 'ws'})
+        except (ValueError, TypeError):
+            pass
+    # WS 미준비 또는 market_id 없음 → REST 폴백
     res = get_orderbook(token_id, api_key, proxy)
     if not res.get('ok'):
         return jsonify({'success': False, 'error': res.get('data') or res.get('error', 'API 오류')}), 502
-    return jsonify({'success': True, 'result': res.get('data')})
+    return jsonify({'success': True, 'result': res.get('data'), 'source': 'rest'})
 
 
 @app.route('/api/opinion/token/price-history')
