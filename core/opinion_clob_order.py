@@ -22,12 +22,56 @@ OPINION_CLOB_HOST = os.getenv("OPINION_CLOB_HOST", "https://proxy.opinion.trade:
 BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 
 
+def _fetch_multi_sig_from_api(account: OpinionAccount) -> Optional[str]:
+    """
+    Opinion API /user/auth 에서 계정 정보 조회.
+    - V2GetApiKeyResp: {apiKey, walletAddress, walletUsers: Dict[str,str]}
+    - walletUsers 값 중 EOA와 다른 Safe 주소를 탐색.
+    - 없으면 None → 폴백(EOA)으로 넘어감.
+    """
+    try:
+        from core.opinion_client import _request
+        resp = _request("GET", "/user/auth", account.api_key, account.proxy, timeout=8)
+        status = resp.get("status_code")
+        raw = resp.get("data", {}) or {}
+        # 응답 전체를 INFO로 기록 → 필드 구조 파악에 활용
+        logger.info("계정 %s /user/auth 응답: status=%s data=%s",
+                    getattr(account, "id", 1), status, raw)
+        if not resp.get("ok") and status != 200:
+            return None
+        result = raw.get("result") or {}
+        if not isinstance(result, dict):
+            return None
+        eoa = (getattr(account, "eoa", None) or "").strip().lower()
+        # walletUsers 값 중 Safe 주소 후보 탐색
+        wallet_users = result.get("walletUsers") or {}
+        if isinstance(wallet_users, dict):
+            for v in wallet_users.values():
+                v = (v or "").strip()
+                if v.startswith("0x") and len(v) == 42 and v.lower() != eoa:
+                    return v
+        # walletAddress가 EOA와 다르면 Safe 주소일 수 있음
+        wallet_addr = (result.get("walletAddress") or "").strip()
+        if wallet_addr.startswith("0x") and len(wallet_addr) == 42 and wallet_addr.lower() != eoa:
+            return wallet_addr
+        return None
+    except Exception as e:
+        logger.debug("_fetch_multi_sig_from_api 실패 (무시): %s", e)
+        return None
+
+
+# 계정별 multiSigWallet 캐시 (프로세스 수명 동안 유지)
+_multi_sig_cache: Dict[int, str] = {}
+
+
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
     .env: OPINION_CLOB_PK_{id} 필수.
-    OPINION_MULTISIG_{id}: Opinion.trade Gnosis Safe 컨트랙트 주소(EOA 아님). 미설정 시 CLOB PK 파생 EOA 사용.
-    에러 10603 시: .env에 OPINION_MULTISIG_{id}=<Safe 주소> 또는 app.opinion.trade에서 같은 지갑 연결. (docs/OPINION_ERROR_10603.md)
+    multi_sig_addr 결정 우선순위:
+      1. OPINION_MULTISIG_{id} (.env에 직접 설정)
+      2. Opinion API /user/auth → multiSigWallet 자동 조회 (캐시됨)
+      3. CLOB PK 파생 EOA (폴백, 10603 에러 발생 가능 → docs/OPINION_ERROR_10603.md)
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
@@ -35,17 +79,30 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
     if not multi_sig:
-        try:
-            from eth_account import Account as EthAccount
-            multi_sig = EthAccount.from_key(pk).address
-        except Exception as e:
-            logger.warning("CLOB PK에서 EOA 파생 실패, account.eoa 폴백: %s", e)
-            multi_sig = (getattr(account, "eoa", None) or "").strip()
-        if multi_sig:
+        multi_sig = _multi_sig_cache.get(aid, "")
+    if not multi_sig:
+        # Opinion API에서 Gnosis Safe 주소 자동 조회
+        fetched = _fetch_multi_sig_from_api(account)
+        if fetched:
+            logger.info(
+                "계정 %s: API에서 Gnosis Safe 주소 자동 조회 성공 → %s",
+                aid, fetched,
+            )
+            _multi_sig_cache[aid] = fetched
+            multi_sig = fetched
+        else:
+            # 최종 폴백: CLOB PK 파생 EOA
             logger.warning(
-                "계정 %s: OPINION_MULTISIG_%s 미설정 → CLOB PK 파생 EOA 사용. 에러 10603 시 docs/OPINION_ERROR_10603.md 참고.",
+                "계정 %s: Gnosis Safe 주소 자동 조회 실패 → CLOB PK 파생 EOA 사용. "
+                "에러 10603 시 docs/OPINION_ERROR_10603.md 또는 OPINION_MULTISIG_%s 수동 설정 필요.",
                 aid, aid,
             )
+            try:
+                from eth_account import Account as EthAccount
+                multi_sig = EthAccount.from_key(pk).address
+            except Exception as e:
+                logger.warning("CLOB PK에서 EOA 파생 실패, account.eoa 폴백: %s", e)
+                multi_sig = (getattr(account, "eoa", None) or "").strip()
     if not multi_sig:
         return None
     if not multi_sig.startswith("0x"):
@@ -173,10 +230,14 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
+        # 10603: multi_sig_addr 불일치 → 캐시 무효화 후 재시도 유도
         if "10603" in err_msg:
+            aid = getattr(account, "id", "?")
+            _multi_sig_cache.pop(aid if isinstance(aid, int) else -1, None)
             err_msg = (
-                "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
-                "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
+                f"에러 10603: Gnosis Safe 주소 불일치. "
+                f"자동 조회 실패 시 .env에 OPINION_MULTISIG_{aid}=<Safe 주소>를 직접 설정하세요. "
+                f"(docs/OPINION_ERROR_10603.md 또는 safe.global BNB Chain에서 GnosisSafeProxy 주소 확인)"
             )
         elif hasattr(e, "status") and hasattr(e, "body"):
             body = getattr(e, "body", None)
