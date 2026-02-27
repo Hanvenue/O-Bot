@@ -26,7 +26,7 @@ _subscribed_ids: Set[int] = set()
 # 연결된 상태에서 즉시 보낼 구독/해제 대기열 (live 전송용)
 _pending_subscribe: Set[int] = set()
 _pending_unsubscribe: Set[int] = set()
-# market_id -> 마지막 수신 메시지(원문) 캐시
+# market_id -> 마지막 수신 depth.diff(변경분) 메시지 1개만 저장. 전체 오더북 상태가 아님.
 _orderbook_cache: Dict[int, Dict[str, Any]] = {}
 # market_id -> 해당 시장의 token_id 집합 (get_cached_orderbook_for_token용)
 _market_token_ids: Dict[int, Set[str]] = {}
@@ -68,10 +68,10 @@ async def _opinion_ws_loop(api_key: str):
                 close_timeout=5,
             ) as ws:
                 logger.info("Opinion WebSocket 연결됨: %s", OPINION_WS_BASE)
-                # 기존 구독 복원 (재연결 시)
+                # 기존 구독 복원 (재연결 시). 재연결 직후 _pending_subscribe는 clear 후 _subscribed_ids로 복원해 이중 전송 방지.
                 with _cache_lock:
                     ids = list(_subscribed_ids)
-                    _pending_subscribe.clear()  # 복원으로 이미 보냄
+                    _pending_subscribe.clear()
                 for mid in ids:
                     await ws.send(
                         json.dumps(
@@ -100,6 +100,7 @@ async def _opinion_ws_loop(api_key: str):
                             )
                         )
                     for mid in to_unsub:
+                        # Opinion WS 스펙: action "UNSUBSCRIBE" (문서 기준)
                         await ws.send(
                             json.dumps(
                                 {
@@ -200,7 +201,9 @@ def unsubscribe_orderbook(market_id: int) -> None:
 
 def get_cached_orderbook_for_market(market_id: int) -> Optional[Dict[str, Any]]:
     """
-    market_id 기준 캐시된 오더북(또는 depth.diff) 메시지 반환.
+    market_id 기준 캐시된 depth.diff 메시지 반환.
+    반환값은 전체 오더북 스냅샷이 아닌 마지막 depth.diff 메시지임.
+    전체 오더북이 필요하면 REST get_orderbook()을 사용할 것.
     캐시가 없거나 WS 미사용 시 None.
     """
     with _cache_lock:

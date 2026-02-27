@@ -90,6 +90,22 @@ from core.opinion_auto_trader import opinion_auto_trader
 from core import opinion_ws_client
 
 
+def _start_ws_background():
+    """gunicorn/flask 양쪽에서 WS 백그라운드 시작. 중복 호출 무시."""
+    try:
+        btc_price_service.start_stream()
+    except Exception as e:
+        logger.warning("BTC WS 미시작: %s", e)
+    try:
+        if OPINION_API_KEY:
+            opinion_ws_client.start_ws(OPINION_API_KEY)
+    except Exception as e:
+        logger.warning("Opinion WS 미시작: %s", e)
+
+
+_start_ws_background()  # 모듈 임포트 시 한 번 실행
+
+
 def _opinion_auth():
     """Opinion 읽기용 API키·프록시. 없으면 (None, None)."""
     if not OPINION_API_KEY or not has_proxy():
@@ -613,24 +629,6 @@ def get_btc_price():
     except Exception as e:
         logger.error("BTC price error: %s", e)
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ---------- WS 백그라운드 시작 (gunicorn·python app.py 공통) ----------
-# if __name__ 블록에만 두면 gunicorn에서 실행되지 않으므로, 모듈 로드 시 한 번만 실행.
-# start_stream/start_ws 내부에서 이미 스레드 alive 체크로 중복 시작 방지.
-def _start_ws_background():
-    try:
-        btc_price_service.start_stream()
-    except Exception as e:
-        logger.warning("⚠️ BTC 시세 스트림 미시작 (REST fallback 사용): %s", e)
-    try:
-        if OPINION_API_KEY:
-            opinion_ws_client.start_ws(OPINION_API_KEY)
-    except Exception as e:
-        logger.warning("⚠️ Opinion WS 미시작 (REST만 사용): %s", e)
-
-
-_start_ws_background()
 
 
 if __name__ == '__main__':
