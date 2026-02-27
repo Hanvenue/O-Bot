@@ -25,9 +25,9 @@ BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
-    .env: OPINION_CLOB_PK_{id} 필수. OPINION_MULTISIG_{id} 없으면 CLOB PK에서 EOA 자동 파생.
-    주의: account.eoa(Opinion 로그인 주소)와 CLOB PK 주소가 다를 수 있으므로
-          반드시 PK에서 파생한 주소를 multi_sig_addr로 사용해야 에러 10603 방지.
+    .env: OPINION_CLOB_PK_{id} 필수. OPINION_MULTISIG_{id} 없으면 account.eoa 사용.
+    multi_sig_addr = Opinion에 등록된 자산 소유자 주소(account.eoa).
+    CLOB PK는 서명용이며 자산 소유자 식별에 사용하지 않음 (10603 방지).
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
@@ -35,13 +35,8 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
     if not multi_sig:
-        # CLOB PK에서 EOA 자동 파생 — account.eoa는 Opinion 로그인 계정이므로 CLOB PK와 다를 수 있음
-        try:
-            from eth_account import Account as EthAccount
-            multi_sig = EthAccount.from_key(pk).address
-        except Exception as e:
-            logger.warning("CLOB PK에서 EOA 파생 실패, account.eoa 폴백: %s", e)
-            multi_sig = (getattr(account, "eoa", None) or "").strip()
+        # account.eoa = Opinion에 등록된 자산 소유자 주소 (CLOB PK 파생 주소와 다를 수 있음)
+        multi_sig = (getattr(account, "eoa", None) or "").strip()
     if not multi_sig:
         return None
     if not multi_sig.startswith("0x"):
