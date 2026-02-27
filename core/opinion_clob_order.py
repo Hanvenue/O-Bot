@@ -25,9 +25,11 @@ BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
-    .env: OPINION_CLOB_PK_{id} 필수. OPINION_MULTISIG_{id} 없으면 CLOB PK에서 EOA 자동 파생.
-    주의: account.eoa(Opinion 로그인 주소)와 CLOB PK 주소가 다를 수 있으므로
-          반드시 PK에서 파생한 주소를 multi_sig_addr로 사용해야 에러 10603 방지.
+    .env: OPINION_CLOB_PK_{id} 필수.
+    OPINION_MULTISIG_{id}: Opinion.trade가 배포한 Gnosis Safe 컨트랙트 주소.
+      - EOA(지갑 주소)가 아니라 Safe 프록시 주소. 에러 10603 방지를 위해 설정 권장.
+      - 미설정 시 CLOB PK 파생 EOA 폴백 (Gnosis Safe 미사용 환경에서만 정상 작동).
+      - Safe 주소 확인: safe.global (BNB Chain) 또는 BSCscan에서 내 지갑 트랜잭션 조회.
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
@@ -35,7 +37,15 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
     if not multi_sig:
-        # CLOB PK에서 EOA 자동 파생 — account.eoa는 Opinion 로그인 계정이므로 CLOB PK와 다를 수 있음
+        # OPINION_MULTISIG_{id} 미설정: CLOB PK 파생 EOA 폴백
+        # ※ Opinion.trade CLOB은 Gnosis Safe v1.3.0을 multi_sig로 사용.
+        #   EOA ≠ Safe 주소이므로 10603(Asset owner) 에러 시 .env에 OPINION_MULTISIG_{id}를 설정하세요.
+        logger.warning(
+            "계정 %s: OPINION_MULTISIG_%s 미설정 → CLOB PK 파생 EOA 사용. "
+            "에러 10603 발생 시 .env에 OPINION_MULTISIG_%s=<Gnosis Safe 주소> 설정 필요. "
+            "(safe.global BNB Chain 또는 BSCscan에서 확인)",
+            aid, aid, aid,
+        )
         try:
             from eth_account import Account as EthAccount
             multi_sig = EthAccount.from_key(pk).address
@@ -145,7 +155,7 @@ def _place_order_impl(
             price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
-        # check_approval=True: SDK가 enable_trading() 자동 실행 → Opinion 프록시 지갑 등록 (10603 방지)
+        # check_approval=True: SDK가 enable_trading() 자동 실행 → USDT 사용 승인 트랜잭션
         result = client.place_order(data, check_approval=True)
         order_id = None
         if hasattr(result, "result") and hasattr(result.result, "data"):
@@ -166,7 +176,15 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
-        if hasattr(e, "status") and hasattr(e, "body"):
+        # 10603: multi_sig_addr가 실제 Gnosis Safe 주소와 불일치 → 사용자에게 설정 안내
+        if "10603" in err_msg:
+            aid = getattr(account, "id", "?")
+            err_msg = (
+                f"에러 10603: multi_sig_addr 불일치. "
+                f".env에 OPINION_MULTISIG_{aid}=<Gnosis Safe 컨트랙트 주소>를 설정해 주세요. "
+                f"(EOA가 아닌 Opinion.trade Gnosis Safe 주소. safe.global BNB Chain에서 확인)"
+            )
+        elif hasattr(e, "status") and hasattr(e, "body"):
             interpreted = interpret_opinion_api_response(
                 getattr(e, "status", 500),
                 getattr(e, "body", None) if isinstance(getattr(e, "body", None), dict) else None,
