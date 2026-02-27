@@ -266,8 +266,14 @@ def _place_order_impl(
         proxy_str = (proxy_dict.get("https") or proxy_dict.get("http")) if proxy_dict else None
         with _proxy_env(proxy_str):
             result = client.place_order(data, check_approval=False)
-        # 응답 구조 확인용 로그 (order_id 파싱 실패 시 진단)
-        logger.info("place_order raw result type=%s repr=%s", type(result).__name__, repr(result)[:300])
+        logger.debug("place_order raw result type=%s repr=%s", type(result).__name__, repr(result)[:300])
+
+        # API 레벨 에러 체크 (200 응답이지만 errno != 0)
+        errno = getattr(result, "errno", None)
+        errmsg = getattr(result, "errmsg", None) or ""
+        if errno is not None and int(errno) != 0:
+            logger.warning("CLOB place_order API 에러 errno=%s errmsg=%s", errno, errmsg)
+            return {"success": False, "error": f"[{errno}] {errmsg or '주문 실패'}", "order_id": None}
 
         order_id = _extract_order_id(result)
         return {"success": True, "order_id": str(order_id) if order_id else None, "id": order_id}
