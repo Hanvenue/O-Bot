@@ -46,22 +46,51 @@ Maker 주문 실패: [10603] Asset owner must be the current multi-signature wal
 
 ## 4. 해결 체크리스트
 
-1. **CLOB PK와 “한 지갑”으로 맞추기**  
-   - `OPINION_CLOB_PK_1` = **실제로 USDT/포지션을 보유한 OKX 지갑의 Private Key**인지 확인.  
+1. **CLOB PK와 “한 지갑”으로 맞추기**
+   - `OPINION_CLOB_PK_1` = **실제로 USDT/포지션을 보유한 OKX 지갑의 Private Key**인지 확인.
    - 그 PK에서 나온 주소를 아래에서 사용.
 
-2. **Opinion 웹에서 같은 지갑 연결**  
-   - [app.opinion.trade](https://app.opinion.trade) 접속 → **같은 OKX 지갑(위 주소)**으로 연결 후 로그인(서명).  
+2. **Opinion 웹에서 같은 지갑 연결**
+   - [app.opinion.trade](https://app.opinion.trade) 접속 → **같은 OKX 지갑(위 주소)**으로 연결 후 로그인(서명).
    - “My Profile” 등에서 보이는 주소가 **PK에서 파생한 주소와 동일한지** 확인.
 
-3. **.env에서 MULTISIG 정리**  
-   - EOA만 쓸 때: **`OPINION_MULTISIG_1`(또는 _2) 비우기 또는 삭제.**  
-   - 그러면 코드가 **PK에서 파생한 EOA**를 `multi_sig_addr`로 씀.  
+3. **.env에서 MULTISIG 정리**
+   - EOA만 쓸 때: **`OPINION_MULTISIG_1`(또는 _2) 비우기 또는 삭제.**
+   - 그러면 코드가 **PK에서 파생한 EOA**를 `multi_sig_addr`로 씀.
    - Gnosis Safe를 쓰는 경우에만 `OPINION_MULTISIG_1`에 Safe 컨트랙트 주소를 명시.
 
-4. **API 키와 지갑 관계**  
-   - API 키 신청 시 특정 지갑 주소를 적었다면, 그 주소 = **PK에서 파생한 주소**여야 함.  
+4. **API 키와 지갑 관계**
+   - API 키 신청 시 특정 지갑 주소를 적었다면, 그 주소 = **PK에서 파생한 주소**여야 함.
    - 다르면 Opinion 지원에 “API 키에 연결된 지갑 주소 변경” 요청이 필요할 수 있음.
+
+---
+
+## 4-1. Gnosis Safe 주소 확인 방법 (BSCScan)
+
+Opinion.trade CLOB 셋업 시 Safe가 자동 생성된 경우, BSCScan에서 Safe 컨트랙트 주소를 찾을 수 있습니다.
+
+> **주의:** BSCScan UI가 업데이트되어 탭 이름이 변경되었습니다.
+> 구버전: “Internal Txns” → **현재: “Other Transactions”**
+
+**찾는 방법 (두 가지 중 하나):**
+
+**방법 A — “Other Transactions” 탭:**
+1. BSCScan에서 지갑 주소 검색
+2. **”Other Transactions”** 탭 클릭 (구버전의 “Internal Txns”와 동일한 탭)
+3. 타입이 **”Contract Creation”**인 항목 찾기 → 생성된 Safe 컨트랙트 주소 복사
+
+**방법 B — “Transactions” 탭에서 직접 검색:**
+1. BSCScan에서 지갑 주소 검색
+2. **”Transactions”** 탭 클릭
+3. `To` 주소가 `0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2` (Gnosis Safe ProxyFactory)인 트랜잭션 찾기 → 해당 트랜잭션의 생성된 컨트랙트 주소 복사
+
+**”Other Transactions” 탭에 아무것도 없는 경우 (Safe 없음):**
+
+BSCScan의 “Other Transactions” 탭에 트랜잭션이 없으면 **Gnosis Safe가 생성되지 않은 것**입니다.
+이 경우 EOA 지갑 주소를 그대로 사용하면 되므로:
+
+- `.env`에서 `OPINION_MULTISIG_1`(또는 _2)을 **비우거나 삭제**하세요.
+- 코드가 자동으로 CLOB PK에서 EOA를 파생해 `multi_sig_addr`로 사용합니다.
 
 ---
 
