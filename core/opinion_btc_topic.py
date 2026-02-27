@@ -18,19 +18,30 @@ _btc_patterns = ("bitcoin up or down", "btc up or down")
 
 
 def _extract_list(data: dict) -> list:
-    """API 응답에서 market list 추출. result.list / data(배열) / result 형식 대응."""
+    """API 응답에서 market list 추출.
+    지원 형식:
+      - {"result": {"list": [...], "total": N}}  (기존)
+      - {"data": {"list": [...], "total": N}}     (신규)
+      - {"data": [...]}                           (data 배열)
+      - {"result": [...]}                         (result 배열)
+    """
     if not data:
         return []
-    # result.list (기존 형식)
-    r = data.get("result") or data
+    # result.list
+    r = data.get("result")
     if isinstance(r, dict) and "list" in r:
         lst = r.get("list")
         if isinstance(lst, list):
             return lst
     if isinstance(r, list):
         return r
-    # data가 배열인 경우 (일부 API 응답)
+    # data.list (신규 형식: {"code":0,"data":{"list":[...],"total":N}})
     d = data.get("data")
+    if isinstance(d, dict) and "list" in d:
+        lst = d.get("list")
+        if isinstance(lst, list):
+            return lst
+    # data 배열
     if isinstance(d, list):
         return d
     return []
@@ -72,6 +83,10 @@ def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
             break
         markets.extend(lst)
         res_inner = data.get("result")
+        if not isinstance(res_inner, dict):
+            d_inner = data.get("data")
+            if isinstance(d_inner, dict):
+                res_inner = d_inner
         total = res_inner.get("total", 0) if isinstance(res_inner, dict) else 0
         if len(markets) >= total or len(lst) < limit:
             break
