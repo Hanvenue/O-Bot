@@ -73,16 +73,52 @@ def _get_clob_client(account: OpinionAccount):
             conf.proxy = proxy_url
             # HTTPS CONNECT 터널링 시 Proxy-Authorization 헤더 전송 (407 방지)
             parsed = urlparse(proxy_url)
+            proxy_headers = {}
             if parsed.username and parsed.password:
                 credentials = base64.b64encode(
                     f"{parsed.username}:{parsed.password}".encode()
                 ).decode()
-                conf.proxy_headers = {"Proxy-Authorization": f"Basic {credentials}"}
-            try:
-                from opinion_api.rest import RESTClientObject
-                client.api_client.rest_client = RESTClientObject(conf)
-            except Exception as e:
-                logger.debug("CLOB RESTClient proxy 주입 실패 (프록시 없이 진행): %s", e)
+                proxy_headers = {"Proxy-Authorization": f"Basic {credentials}"}
+                conf.proxy_headers = proxy_headers
+
+            # 1순위: RESTClientObject 재생성 (여러 경로 시도)
+            _rc_class = None
+            for _path in ("opinion_api.rest", "opinion_clob_sdk.rest", "openapi_client.rest"):
+                try:
+                    import importlib
+                    _mod = importlib.import_module(_path)
+                    _rc_class = getattr(_mod, "RESTClientObject", None)
+                    if _rc_class is not None:
+                        break
+                except ImportError:
+                    continue
+
+            if _rc_class is not None:
+                try:
+                    client.api_client.rest_client = _rc_class(conf)
+                    logger.debug("CLOB RESTClientObject 재생성 완료 (%s)", _path)
+                except Exception as e:
+                    logger.warning("CLOB RESTClient 재생성 실패: %s", e)
+                    _rc_class = None  # 폴백으로 넘어감
+
+            # 2순위: urllib3.ProxyManager 직접 교체 (SDK 내부와 무관하게 동작)
+            if _rc_class is None:
+                try:
+                    import urllib3
+                    proxy_manager = urllib3.ProxyManager(
+                        proxy_url,
+                        proxy_headers=proxy_headers,
+                        num_pools=4,
+                        maxsize=4,
+                    )
+                    rest_client = getattr(client.api_client, "rest_client", None)
+                    if rest_client is not None:
+                        rest_client.pool_manager = proxy_manager
+                        logger.debug("CLOB urllib3.ProxyManager 직접 주입 완료")
+                    else:
+                        logger.warning("CLOB rest_client 없음 → 프록시 인증 미적용 (407 가능)")
+                except Exception as e:
+                    logger.warning("CLOB ProxyManager 주입 실패: %s", e)
 
     return client
 
