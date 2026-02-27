@@ -13,6 +13,13 @@ OPINION_API_CODE_MESSAGES = {
     404: "요청한 시장 또는 자원을 찾을 수 없습니다.",
     429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요. (초당 15회 제한)",
     500: "Opinion 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    # CLOB 주문 관련
+    10603: (
+        "multi_sig_addr 불일치 (10603): .env의 OPINION_MULTISIG_{id}에 "
+        "Gnosis Safe 컨트랙트 주소를 설정해 주세요. "
+        "EOA(지갑 주소)가 아니라, Opinion.trade가 생성한 Gnosis Safe 프록시 주소입니다. "
+        "BSCscan에서 내 지갑의 트랜잭션 내역 또는 safe.global(BNB Chain)에서 확인할 수 있습니다."
+    ),
 }
 
 # HTTP status_code → 사용자용 메시지 (API 프록시/네트워크 단)
