@@ -14,6 +14,7 @@ from core.opinion_client import get_market, get_orderbook
 from core.opinion_account import opinion_account_manager, OpinionAccount
 from core.btc_price import btc_price_service
 from core.okx_balance import get_usdt_balance_with_reason
+from core import opinion_ws_client
 
 logger = logging.getLogger(__name__)
 
@@ -157,16 +158,28 @@ def get_1h_market_for_trade(
         out["error"] = "시장에 yesTokenId/noTokenId가 없습니다."
         return out
 
+    # WS 구독 등록 (이미 등록되어 있으면 내부에서 중복 처리됨)
+    if tid:
+        opinion_ws_client.subscribe_orderbook(
+            tid,
+            token_id=yes_token,
+            api_key=OPINION_API_KEY,
+            proxy=OPINION_PROXY,
+        )
+
     # UP = Yes 토큰 호가창 (매수 쪽 = asks 중 최저가)
-    ob_yes = get_orderbook(yes_token, OPINION_API_KEY, OPINION_PROXY)
-    if not ob_yes.get("ok"):
-        out["error"] = "호가창 조회 실패(Yes)"
-        return out
-    asks_yes = _orderbook_levels(ob_yes.get("data") or {}, "asks")
-    best_ask_yes = _best_price(asks_yes, want_low=True)
+    # WS 캐시 우선 → 없으면 REST 폴백
+    best_ask_yes = opinion_ws_client.get_best_ask_from_ws(tid) if tid else None
     if best_ask_yes is None:
-        out["trade_reason"] = "Yes 호가 없음"
-        return out
+        ob_yes = get_orderbook(yes_token, OPINION_API_KEY, OPINION_PROXY)
+        if not ob_yes.get("ok"):
+            out["error"] = "호가창 조회 실패(Yes)"
+            return out
+        asks_yes = _orderbook_levels(ob_yes.get("data") or {}, "asks")
+        best_ask_yes = _best_price(asks_yes, want_low=True)
+        if best_ask_yes is None:
+            out["trade_reason"] = "Yes 호가 없음"
+            return out
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
     taker_price_down = round(1.0 - maker_price_up, 2)
 
