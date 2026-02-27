@@ -6,6 +6,7 @@ Opinion.trade WebSocket 클라이언트 — 오더북 실시간 구독 (market_i
 - HEARTBEAT 30초마다 필수
 - _orderbook_state: REST 스냅샷 초기화 후 depth.diff를 누적 적용한 전체 오더북 상태
   get_best_ask_from_ws() / get_full_orderbook_snapshot()으로 조회.
+- _orderbook_state_ts: 오더북 상태 마지막 갱신 타임스탬프. TTL 초과 시 REST 폴백.
 """
 import asyncio
 import json
@@ -21,6 +22,9 @@ OPINION_WS_BASE = "wss://ws.opinion.trade"
 HEARTBEAT_INTERVAL = 30
 RECONNECT_DELAY = 5
 
+# WS 오더북 상태 TTL: 이 시간(초) 이상 갱신 없으면 get_best_ask_from_ws()가 None 반환 → REST 폴백
+WS_ORDERBOOK_STATE_TTL = 30  # seconds
+
 # 구독 중인 market_id 목록
 _subscribed_ids: Set[int] = set()
 # 연결된 상태에서 즉시 보낼 구독/해제 대기열 (live 전송용)
@@ -30,6 +34,8 @@ _pending_unsubscribe: Set[int] = set()
 _orderbook_cache: Dict[int, Dict[str, Any]] = {}
 # market_id -> 누적 오더북 상태 {"asks": {str(price): float(size)}, "bids": {...}}
 _orderbook_state: Dict[int, Dict[str, Dict[str, float]]] = {}
+# market_id -> 오더북 상태 마지막 갱신 시각 (time.monotonic())
+_orderbook_state_ts: Dict[int, float] = {}
 # market_id -> 해당 시장의 token_id 집합 (get_cached_orderbook_for_token용)
 _market_token_ids: Dict[int, Set[str]] = {}
 _cache_lock = threading.Lock()
@@ -78,6 +84,7 @@ def _apply_depth_diff(market_id: int, data: Dict[str, Any]) -> None:
     """
     ob_data = _extract_ob_data(data)
     state = _orderbook_state.setdefault(market_id, {"asks": {}, "bids": {}})
+    changed = False
     for side in ("asks", "bids"):
         diff = ob_data.get(side)
         if not isinstance(diff, list):
@@ -88,6 +95,9 @@ def _apply_depth_diff(market_id: int, data: Dict[str, Any]) -> None:
                 state[side].pop(price_str, None)
             else:
                 state[side][price_str] = size
+            changed = True
+    if changed:
+        _orderbook_state_ts[market_id] = time.monotonic()
 
 
 def _init_orderbook_state(market_id: int, api_key: str, proxy: str) -> None:
@@ -132,6 +142,7 @@ def _init_orderbook_state(market_id: int, api_key: str, proxy: str) -> None:
 
     with _cache_lock:
         _orderbook_state[market_id] = {"asks": asks, "bids": bids}
+        _orderbook_state_ts[market_id] = time.monotonic()
     logger.info("init_orderbook_state: market_id=%s 초기화 완료 (asks=%d, bids=%d)", market_id, len(asks), len(bids))
 
 
@@ -273,6 +284,7 @@ def stop_ws() -> None:
         _pending_unsubscribe.clear()
         _orderbook_cache.clear()
         _orderbook_state.clear()
+        _orderbook_state_ts.clear()
         _market_token_ids.clear()
     logger.info("Opinion WS 스레드 정지됨.")
 
@@ -315,6 +327,7 @@ def unsubscribe_orderbook(market_id: int) -> None:
         _pending_unsubscribe.add(mid)
         _orderbook_cache.pop(mid, None)
         _orderbook_state.pop(mid, None)
+        _orderbook_state_ts.pop(mid, None)
         _market_token_ids.pop(mid, None)
 
 
@@ -347,11 +360,17 @@ def get_cached_orderbook_for_token(token_id: str) -> Optional[Dict[str, Any]]:
 def get_best_ask_from_ws(market_id: int) -> Optional[float]:
     """
     WS 누적 오더북 상태에서 최저 ask 가격 반환.
-    상태가 없거나 asks가 비어있으면 None.
+    상태가 없거나 asks가 비어있거나 TTL 초과(WS_ORDERBOOK_STATE_TTL 초) 시 None → REST 폴백 유도.
     """
+    mid = int(market_id)
     with _cache_lock:
-        state = _orderbook_state.get(int(market_id))
+        state = _orderbook_state.get(mid)
+        ts = _orderbook_state_ts.get(mid, 0.0)
     if not state:
+        return None
+    # TTL 초과: WS 업데이트가 없었으므로 REST 폴백 유도
+    if time.monotonic() - ts > WS_ORDERBOOK_STATE_TTL:
+        logger.debug("WS 오더북 상태 TTL 초과(market_id=%s, %.0fs), REST 폴백", mid, time.monotonic() - ts)
         return None
     asks = state.get("asks") or {}
     if not asks:
