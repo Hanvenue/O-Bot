@@ -24,22 +24,36 @@ BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 
 def _fetch_multi_sig_from_api(account: OpinionAccount) -> Optional[str]:
     """
-    Opinion API(/user/auth)에서 계정의 Gnosis Safe 주소(multiSigWallet)를 자동 조회.
-    응답 예: {"result": {"multiSigWallet": "0x...", "walletAddress": "0x...", ...}}
+    Opinion API /user/auth 에서 계정 정보 조회.
+    - V2GetApiKeyResp: {apiKey, walletAddress, walletUsers: Dict[str,str]}
+    - walletUsers 값 중 EOA와 다른 Safe 주소를 탐색.
+    - 없으면 None → 폴백(EOA)으로 넘어감.
     """
     try:
         from core.opinion_client import _request
         resp = _request("GET", "/user/auth", account.api_key, account.proxy, timeout=8)
-        if not resp.get("ok"):
+        status = resp.get("status_code")
+        raw = resp.get("data", {}) or {}
+        # 응답 전체를 INFO로 기록 → 필드 구조 파악에 활용
+        logger.info("계정 %s /user/auth 응답: status=%s data=%s",
+                    getattr(account, "id", 1), status, raw)
+        if not resp.get("ok") and status != 200:
             return None
-        data = resp.get("data", {}) or {}
-        result = data.get("result") or data
+        result = raw.get("result") or {}
         if not isinstance(result, dict):
             return None
-        for field in ("multiSigWallet", "multi_sig_wallet", "multiSigAddr", "safeAddress", "safe_address"):
-            val = (result.get(field) or "").strip()
-            if val and val.startswith("0x") and len(val) == 42:
-                return val
+        eoa = (getattr(account, "eoa", None) or "").strip().lower()
+        # walletUsers 값 중 Safe 주소 후보 탐색
+        wallet_users = result.get("walletUsers") or {}
+        if isinstance(wallet_users, dict):
+            for v in wallet_users.values():
+                v = (v or "").strip()
+                if v.startswith("0x") and len(v) == 42 and v.lower() != eoa:
+                    return v
+        # walletAddress가 EOA와 다르면 Safe 주소일 수 있음
+        wallet_addr = (result.get("walletAddress") or "").strip()
+        if wallet_addr.startswith("0x") and len(wallet_addr) == 42 and wallet_addr.lower() != eoa:
+            return wallet_addr
         return None
     except Exception as e:
         logger.debug("_fetch_multi_sig_from_api 실패 (무시): %s", e)
