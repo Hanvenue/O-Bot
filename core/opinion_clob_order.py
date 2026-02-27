@@ -5,9 +5,11 @@ Opinion CLOB SDK 주문 연동
 - get_order_status: 주문 체결 상태 조회
 - 에러 시 opinion_errors.interpret_opinion_api_response() 경유
 """
+import base64
 import logging
 import os
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from core.opinion_account import OpinionAccount
 from core.opinion_config import get_proxy_dict
@@ -69,6 +71,13 @@ def _get_clob_client(account: OpinionAccount):
         proxy_url = proxy_dict.get("https") or proxy_dict.get("http")
         if proxy_url and conf is not None:
             conf.proxy = proxy_url
+            # HTTPS CONNECT 터널링 시 Proxy-Authorization 헤더 전송 (407 방지)
+            parsed = urlparse(proxy_url)
+            if parsed.username and parsed.password:
+                credentials = base64.b64encode(
+                    f"{parsed.username}:{parsed.password}".encode()
+                ).decode()
+                conf.proxy_headers = {"Proxy-Authorization": f"Basic {credentials}"}
             try:
                 from opinion_api.rest import RESTClientObject
                 client.api_client.rest_client = RESTClientObject(conf)
