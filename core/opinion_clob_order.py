@@ -25,9 +25,9 @@ BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
-    .env: OPINION_CLOB_PK_{id} 필수. OPINION_MULTISIG_{id} 없으면 CLOB PK에서 EOA 자동 파생.
-    주의: account.eoa(Opinion 로그인 주소)와 CLOB PK 주소가 다를 수 있으므로
-          반드시 PK에서 파생한 주소를 multi_sig_addr로 사용해야 에러 10603 방지.
+    .env: OPINION_CLOB_PK_{id} 필수.
+    OPINION_MULTISIG_{id}: Gnosis Safe 컨트랙트 주소(EOA 아님). 미설정 시 CLOB PK 파생 EOA 사용.
+    에러 10603 시: .env에 OPINION_MULTISIG_{id}=<Safe 주소> 설정 또는 app.opinion.trade에서 같은 지갑 연결.
     """
     aid = getattr(account, "id", 1)
     pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
@@ -35,7 +35,6 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
     if not multi_sig:
-        # CLOB PK에서 EOA 자동 파생 — account.eoa는 Opinion 로그인 계정이므로 CLOB PK와 다를 수 있음
         try:
             from eth_account import Account as EthAccount
             multi_sig = EthAccount.from_key(pk).address
@@ -58,6 +57,9 @@ def _get_clob_client(account: OpinionAccount):
     if not creds:
         return None
     private_key, multi_sig_addr = creds
+    # 10603 디버깅: 사용 중인 자산 주소 로그 (마스킹)
+    _mask_addr = (multi_sig_addr or "")[:8] + "..." + (multi_sig_addr or "")[-4:] if (multi_sig_addr or "") else "?"
+    logger.info("CLOB client 계정 id=%s, multi_sig_addr=%s", getattr(account, "id", 1), _mask_addr)
     try:
         from opinion_clob_sdk import Client
     except ImportError as e:
@@ -167,12 +169,25 @@ def _place_order_impl(
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
         if hasattr(e, "status") and hasattr(e, "body"):
-            interpreted = interpret_opinion_api_response(
-                getattr(e, "status", 500),
-                getattr(e, "body", None) if isinstance(getattr(e, "body", None), dict) else None,
-                context="CLOB 주문",
+            body = getattr(e, "body", None)
+            if isinstance(body, dict):
+                interpreted = interpret_opinion_api_response(
+                    getattr(e, "status", 500),
+                    body,
+                    context="CLOB 주문",
+                )
+                err_msg = interpreted.get("user_message") or err_msg
+            else:
+                if "10603" in err_msg or (body and "10603" in str(body)):
+                    err_msg = (
+                        "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
+                        "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
+                    )
+        elif "10603" in err_msg:
+            err_msg = (
+                "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
+                "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
             )
-            err_msg = interpreted.get("user_message") or err_msg
         return {"success": False, "error": err_msg, "order_id": None}
 
 

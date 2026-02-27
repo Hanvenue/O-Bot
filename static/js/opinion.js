@@ -64,10 +64,17 @@ function updateSharesPriceDisplay() {
     fetchWithAuth(url)
         .then(function (r) { return r.json(); })
         .then(function (data) {
+            if (!data.success && data.error) {
+                totalEl.textContent = data.error;
+                ratioEl.innerHTML = '— : —';
+                var gapEl = document.getElementById('sharesGapText');
+                if (gapEl) { gapEl.textContent = '—'; gapEl.className = 'gap-value'; }
+                return;
+            }
             var up = data.maker_price_up != null ? Number(data.maker_price_up) : null;
             if (up == null) {
                 ratioEl.innerHTML = '— : —';
-                totalEl.textContent = '—';
+                totalEl.textContent = data.error || '—';
                 if (window.currentOpinionTradeDirection !== undefined) window.currentOpinionTradeDirection = null;
                 if (window.currentOpinionGapUsd !== undefined) window.currentOpinionGapUsd = null;
                 if (window.currentOpinionMakerAccountId !== undefined) window.currentOpinionMakerAccountId = null;
@@ -459,6 +466,8 @@ document.addEventListener('DOMContentLoaded', function () {
     updateSharesPriceDisplay();
     initOverallCard();
     setInterval(updateBtcPriceGapCard, 3000);
+    // Up/Down·예상 거래액·GAP → Maker 주기 갱신 (고정처럼 보이던 문제 해결)
+    setInterval(updateSharesPriceDisplay, 5000);
     document.getElementById('btnAddAccount') && document.getElementById('btnAddAccount').addEventListener('click', openLoginModal);
     document.getElementById('btnLoadBtcUpDown') && document.getElementById('btnLoadBtcUpDown').addEventListener('click', function () { loadBtcUpDown(); updateBtcPriceGapCard(); });
     document.querySelector('#opinionLoginModal .modal-overlay') && document.querySelector('#opinionLoginModal .modal-overlay').addEventListener('click', closeLoginModal);

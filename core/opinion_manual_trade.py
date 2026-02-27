@@ -158,18 +158,25 @@ def get_1h_market_for_trade(
         out["error"] = "시장에 yesTokenId/noTokenId가 없습니다."
         return out
 
-    # WS 구독 등록 (이미 등록되어 있으면 내부에서 중복 처리됨)
+    # WS 구독 등록 (실패해도 REST 폴백으로 진행)
     if tid:
-        opinion_ws_client.subscribe_orderbook(
-            tid,
-            token_id=yes_token,
-            api_key=OPINION_API_KEY,
-            proxy=OPINION_PROXY,
-        )
+        try:
+            opinion_ws_client.subscribe_orderbook(
+                tid,
+                token_id=yes_token,
+                api_key=OPINION_API_KEY,
+                proxy=OPINION_PROXY,
+            )
+        except Exception as e:
+            logger.debug("WS 구독 스킵( REST 사용): %s", e)
 
-    # UP = Yes 토큰 호가창 (매수 쪽 = asks 중 최저가)
-    # WS 캐시 우선 → 없으면 REST 폴백
-    best_ask_yes = opinion_ws_client.get_best_ask_from_ws(tid) if tid else None
+    # UP = Yes 토큰 호가창 (매수 쪽 = asks 중 최저가). WS 캐시 우선 → 없으면 REST 폴백
+    best_ask_yes = None
+    if tid:
+        try:
+            best_ask_yes = opinion_ws_client.get_best_ask_from_ws(tid)
+        except Exception as e:
+            logger.debug("WS 호가 스킵( REST 사용): %s", e)
     if best_ask_yes is None:
         ob_yes = get_orderbook(yes_token, OPINION_API_KEY, OPINION_PROXY)
         if not ob_yes.get("ok"):

@@ -156,3 +156,10 @@ sudo journalctl -u obot -f
 # nginx 로그 확인
 sudo tail -f /var/log/nginx/error.log
 ```
+
+### "1시간 마켓 없음"이 뜰 때
+
+- **원인:** 서버에서 Opinion API로 시장 목록을 가져오지 못함.
+- **확인:** 서버의 `/home/ubuntu/O-Bot/.env`에 `OPINION_API_KEY`, `OPINION_PROXY`(계정 1)가 설정되어 있는지 확인.
+- **프록시:** Opinion이 지역 제한이 있으면, Lightsail(프랑크푸르트)에서 접속하려면 **프록시가 필요**할 수 있음. 같은 .env를 로컬에서 쓰고 있다면 서버에도 동일하게 넣어 두세요.
+- **로그:** `sudo journalctl -u obot -n 100` 로 get_markets 실패/타임아웃 메시지가 있는지 확인.

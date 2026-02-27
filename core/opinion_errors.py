@@ -13,6 +13,11 @@ OPINION_API_CODE_MESSAGES = {
     404: "요청한 시장 또는 자원을 찾을 수 없습니다.",
     429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요. (초당 15회 제한)",
     500: "Opinion 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    # CLOB 주문 에러 (Asset owner = multi_sig_addr)
+    10603: (
+        "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
+        "1) .env에서 OPINION_MULTISIG_1(또는 _2)를 비우고, 2) app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결·로그인한 뒤 다시 시도하세요. 자세한 내용은 docs/OPINION_ERROR_10603.md 참고."
+    ),
 }
 
 # HTTP status_code → 사용자용 메시지 (API 프록시/네트워크 단)
