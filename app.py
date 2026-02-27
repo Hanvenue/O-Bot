@@ -5,6 +5,7 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import logging
 import re
+import time
 from config import Config
 from core.btc_price import btc_price_service
 
@@ -253,6 +254,12 @@ def opinion_btc_price_gap():
                 'topicId': topic_id,
             }), 404
         start_price = btc_price_service.get_price_at_timestamp(start_ts)
+        if start_price is None:
+            # Benchmarks 실패 + 시작 시각이 최근 5분 이내 또는 미래 → 현재가로 폴백
+            # (다음 구간 마켓이 조회됐거나 구간 시작 직후 아직 미인덱스 상태)
+            if start_ts >= int(time.time()) - 300:
+                logger.info("Benchmarks 폴백: ts=%s 미래/최근, 현재가 사용", start_ts)
+                start_price = btc_price_service.get_current_price()
         if start_price is None:
             return jsonify({
                 'success': False,

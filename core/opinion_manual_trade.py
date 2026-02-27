@@ -193,6 +193,10 @@ def get_1h_market_for_trade(
         direction = (direction_override or "").strip().upper()
     elif start_ts is not None:
         start_price = btc_price_service.get_price_at_timestamp(start_ts)
+        if start_price is None and start_ts >= int(time.time()) - 300:
+            # 시작 시각이 최근 5분 이내 또는 미래 → 현재가 폴백 (다음 구간 마켓 or 인덱스 미완)
+            logger.info("start_price 폴백: Benchmarks 실패(ts=%s), 현재가 사용", start_ts)
+            start_price = btc_price_service.get_current_price()
         current_price = btc_price_service.get_current_price()
         if start_price is None or current_price is None:
             out["trade_reason"] = "BTC 가격을 가져올 수 없어 방향 판단 불가 - 거래 건너뜀"
