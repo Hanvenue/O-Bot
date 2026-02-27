@@ -6,6 +6,7 @@ Opinion CLOB SDK 주문 연동
 - 에러 시 opinion_errors.interpret_opinion_api_response() 경유
 """
 import base64
+import contextlib
 import logging
 import os
 from typing import Optional, Dict, Any
@@ -16,6 +17,31 @@ from core.opinion_config import get_proxy_dict
 from core.opinion_errors import interpret_opinion_api_response
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _proxy_env(proxy_url: Optional[str]):
+    """
+    CLOB SDK 호출 범위 내에서만 proxy 환경변수 설정.
+    urllib3/http.client가 내부적으로 env를 읽어 CONNECT 인증에 사용.
+    스레드 안전 주의: 단일 계정·단일 프록시 환경에서만 사용.
+    """
+    if not proxy_url:
+        yield
+        return
+    _vars = ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY")
+    _saved = {v: os.environ.get(v) for v in _vars}
+    try:
+        for v in _vars:
+            os.environ[v] = proxy_url
+        yield
+    finally:
+        for v, val in _saved.items():
+            if val is None:
+                os.environ.pop(v, None)
+            else:
+                os.environ[v] = val
+
 
 # CLOB SDK용 호스트 (OpenAPI 베이스; /openapi 제외)
 OPINION_CLOB_HOST = os.getenv("OPINION_CLOB_HOST", "https://proxy.opinion.trade:8443")
@@ -173,7 +199,10 @@ def _place_order_impl(
             price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
-        result = client.place_order(data, check_approval=False)
+        proxy_dict = get_proxy_dict(account.proxy or "")
+        proxy_str = (proxy_dict.get("https") or proxy_dict.get("http")) if proxy_dict else None
+        with _proxy_env(proxy_str):
+            result = client.place_order(data, check_approval=False)
         order_id = None
         if hasattr(result, "result") and hasattr(result.result, "data"):
             data_obj = result.result.data
