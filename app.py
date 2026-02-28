@@ -87,6 +87,7 @@ from core.opinion_client import (
 from core.opinion_btc_topic import get_latest_bitcoin_up_down_market
 from core.opinion_manual_trade import get_1h_market_for_trade, execute_manual_trade
 from core.opinion_errors import get_auto_error_message, interpret_opinion_api_response
+from core.opinion_clob_order import get_clob_debug_info
 from core.opinion_auto_trader import opinion_auto_trader
 from core import opinion_ws_client
 
@@ -126,6 +127,22 @@ def opinion_accounts():
     try:
         accounts = [a.to_dict() for a in opinion_account_manager.get_all()]
         return jsonify({'success': True, 'accounts': accounts, 'has_proxy': has_proxy()})
+    except Exception as e:
+        logger.exception('opinion accounts: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/opinion/clob-debug')
+def opinion_clob_debug():
+    """10603 디버깅: 각 계정별로 CLOB에 보내는 multi_sig_addr(마스킹). My Profile 주소와 비교용."""
+    try:
+        accs = opinion_account_manager.get_all()
+        infos = []
+        for a in accs:
+            info = get_clob_debug_info(a)
+            if info:
+                infos.append(info)
+        return jsonify({'success': True, 'clob_debug': infos})
     except Exception as e:
         logger.exception('opinion accounts: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500

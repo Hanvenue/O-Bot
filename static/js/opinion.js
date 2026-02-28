@@ -293,6 +293,7 @@ function renderBtcUpDownCard(data) {
     }
     var startStr = startTs != null ? formatTimestamp(startTs) : (formatTimestamp(m.createdAt) + ' (레코드 생성)');
     var endStr = endTs != null ? formatTimestamp(endTs) : '-';
+    var nowStr = formatTimestamp(Math.floor(Date.now() / 1000));
     var imgHtml = thumb
         ? '<div class="btc-card-img-wrap"><img src="' + thumb.replace(/"/g, '&quot;') + '" alt="" onerror="this.parentElement.classList.add(\'failed\')"><div class="btc-card-img-placeholder">No image</div></div>'
         : '<div class="btc-card-img-placeholder">No image</div>';
@@ -305,6 +306,7 @@ function renderBtcUpDownCard(data) {
         '<div class="title">' + title + '</div>' +
         '<div class="row"><strong>' + startLabel + ':</strong> ' + startStr + '</div>' +
         '<div class="row"><strong>' + endLabel + ':</strong> ' + endStr + '</div>' +
+        '<div class="row now-time"><strong>현재 시각:</strong> ' + nowStr + '</div>' +
         '<div class="row"><strong>거래량:</strong> ' + vol + '</div>' +
         '</div></div>';
     updateSharesPriceDisplay();

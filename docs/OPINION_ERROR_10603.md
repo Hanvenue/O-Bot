@@ -44,7 +44,17 @@ Maker 주문 실패: [10603] Asset owner must be the current multi-signature wal
 
 ---
 
-## 4. 해결 체크리스트
+## 4. 5분 해결 (10603 나올 때 바로 하기)
+
+1. 브라우저에서 `https://내서버/api/opinion/clob-debug` 접속 → `multi_sig_addr_sent` 확인.
+2. [app.opinion.trade](https://app.opinion.trade) 로그인(CLOB PK와 같은 지갑) → **My Profile**에서 지갑 주소 **전체** 복사(0x 포함 42자리).
+3. 서버 `.env`에서 `OPINION_MULTISIG_1=` 또는 `OPINION_MULTISIG_2=` 뒤에 **그 주소 그대로** 붙여넣기.
+4. 서버 재시작 (README 운영 명령어: `sudo systemctl restart obot`).
+5. 다시 수동 Go! → My Profile 주소와 3번이 **완전히 같아야** 함.
+
+---
+
+## 5. 해결 체크리스트 (상세)
 
 1. **CLOB PK와 “한 지갑”으로 맞추기**  
    - `OPINION_CLOB_PK_1` = **실제로 USDT/포지션을 보유한 OKX 지갑의 Private Key**인지 확인.  
@@ -65,7 +75,7 @@ Maker 주문 실패: [10603] Asset owner must be the current multi-signature wal
 
 ---
 
-## 5. 요약
+## 6. 요약 (한 줄)
 
 | 항목 | 내용 |
 |------|------|
@@ -75,7 +85,7 @@ Maker 주문 실패: [10603] Asset owner must be the current multi-signature wal
 
 ---
 
-## 6. 참고
+## 7. 참고
 
 - [Connect with Web3 wallet | Opinion Docs](https://docs.opinion.trade/trade-on-opinion.trade/connect-with-web3-wallet)
 - [Opinion CLOB SDK – Configuration / Client](https://docs.opinion.trade/developer-guide/opinion-clob-sdk/)

@@ -35,33 +35,71 @@ def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
         return None
     multi_sig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
     if not multi_sig:
-        try:
-            from eth_account import Account as EthAccount
-            multi_sig = EthAccount.from_key(pk).address
-        except Exception as e:
-            logger.warning("CLOB PK에서 EOA 파생 실패, account.eoa 폴백: %s", e)
-            multi_sig = (getattr(account, "eoa", None) or "").strip()
+        # .env에 적힌 계정 EOA와 동일한 문자열 사용 (10603 방지). 없으면 PK에서 파생.
+        multi_sig = (getattr(account, "eoa", None) or "").strip()
+        if not multi_sig:
+            try:
+                from eth_account import Account as EthAccount
+                multi_sig = EthAccount.from_key(pk).address
+            except Exception as e:
+                logger.warning("CLOB PK에서 EOA 파생 실패: %s", e)
         if multi_sig:
-            logger.warning(
-                "계정 %s: OPINION_MULTISIG_%s 미설정 → CLOB PK 파생 EOA 사용. 에러 10603 시 docs/OPINION_ERROR_10603.md 참고.",
+            logger.info(
+                "계정 %s: OPINION_MULTISIG_%s 미설정 → account.eoa/PK 파생 EOA 사용.",
                 aid, aid,
             )
     if not multi_sig:
         return None
     if not multi_sig.startswith("0x"):
         multi_sig = "0x" + multi_sig
+    # Opinion 백엔드 대소문자 비교 이슈 방지: 항상 소문자로 통일
+    multi_sig = multi_sig.lower()
     return (pk, multi_sig)
 
 
-def _get_clob_client(account: OpinionAccount):
+def get_clob_debug_info(account: OpinionAccount) -> Optional[Dict[str, Any]]:
+    """
+    10603 디버깅: 지금 이 계정으로 주문 시 보내는 multi_sig_addr(마스킹) 등.
+    .env의 OPINION_MULTISIG가 비어 있으면 account.eoa 또는 PK 파생 EOA 사용.
+    """
+    creds = _get_clob_credentials(account)
+    if not creds:
+        return None
+    _, multi_sig_addr = creds
+    eoa = (getattr(account, "eoa", None) or "").strip() or None
+    aid = getattr(account, "id", 1)
+    env_multisig = (os.getenv(f"OPINION_MULTISIG_{aid}") or "").strip()
+
+    def _mask(addr: Optional[str]) -> str:
+        if not addr or len(addr) < 12:
+            return addr or "—"
+        return (addr or "")[:8] + "..." + (addr or "")[-6:]
+
+    return {
+        "account_id": aid,
+        "multi_sig_addr_sent": _mask(multi_sig_addr),
+        "eoa_from_account": _mask(eoa),
+        "opination_multisig_set": bool(env_multisig),
+        "hint": "app.opinion.trade My Profile에 보이는 주소가 multi_sig_addr_sent와 같아야 합니다.",
+    }
+
+
+def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] = None):
     """
     Opinion CLOB SDK Client 생성.
     account.api_key, account.proxy 사용. 프록시는 Configuration.proxy + RESTClient 재생성으로 주입 (레이스 컨디션 방지).
+    multi_sig_override: 지정 시 이 주소를 multi_sig_addr로 사용 (10603 재시도 시 EOA 강제용).
     """
     creds = _get_clob_credentials(account)
     if not creds:
         return None
     private_key, multi_sig_addr = creds
+    if multi_sig_override:
+        multi_sig_addr = (multi_sig_override or "").strip()
+        if multi_sig_addr and not multi_sig_addr.startswith("0x"):
+            multi_sig_addr = "0x" + multi_sig_addr
+        # 소문자/checksummed 그대로 전달 (재시도 시 둘 다 시도)
+        logger.info("CLOB client multi_sig_override 적용 (10603 재시도): %s...%s", (multi_sig_addr or "")[:8], (multi_sig_addr or "")[-4:])
     # 10603 디버깅: 사용 중인 자산 주소 로그 (마스킹)
     _mask_addr = (multi_sig_addr or "")[:8] + "..." + (multi_sig_addr or "")[-4:] if (multi_sig_addr or "") else "?"
     logger.info("CLOB client 계정 id=%s, multi_sig_addr=%s", getattr(account, "id", 1), _mask_addr)
@@ -85,9 +123,11 @@ def _get_clob_client(account: OpinionAccount):
         conf = client.api_client.configuration
         proxy_url = proxy_dict.get("https") or proxy_dict.get("http")
         if proxy_url and conf is not None:
+            # Configuration에 먼저 설정한 뒤, RESTClientObject를 새로 만들어야 프록시가 적용됨 (생성 시 conf.proxy 읽음)
             conf.proxy = proxy_url
-            # HTTPS CONNECT 터널링 시 Proxy-Authorization 헤더 전송 (407 방지)
             parsed = urlparse(proxy_url)
+            proxy_host = (parsed.hostname or parsed.path or "?") if parsed else "?"
+            # HTTPS CONNECT 터널링 시 Proxy-Authorization 헤더 전송 (407 방지)
             if parsed.username and parsed.password:
                 credentials = base64.b64encode(
                     f"{parsed.username}:{parsed.password}".encode()
@@ -96,8 +136,16 @@ def _get_clob_client(account: OpinionAccount):
             try:
                 from opinion_api.rest import RESTClientObject
                 client.api_client.rest_client = RESTClientObject(conf)
+                logger.info(
+                    "CLOB 계정 id=%s: 프록시 적용됨 (host=%s). 주문 요청은 이 프록시를 통해 나갑니다. 10403이면 이 IP가 제한 지역인지 확인하세요.",
+                    getattr(account, "id", 1),
+                    proxy_host,
+                )
             except Exception as e:
-                logger.debug("CLOB RESTClient proxy 주입 실패 (프록시 없이 진행): %s", e)
+                logger.warning("CLOB RESTClient proxy 주입 실패 (주문 요청이 프록시 없이 나갈 수 있음): %s", e)
+    else:
+        if not proxy_dict:
+            logger.warning("CLOB 계정 id=%s: 프록시 없음. 주문 요청이 서버 IP로 나가므로 10403(지역 제한) 가능성 있음.", getattr(account, "id", 1))
 
     return client
 
@@ -173,20 +221,56 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
-        if "10603" in err_msg:
+        # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
+        body = getattr(e, "body", None) if hasattr(e, "body") else None
+        is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
+        if is_10603 and isinstance(body, dict):
+            logger.warning("10603 응답 body (기대 주소 확인용): %s", body)
+        # 10603: MULTISIG 불일치 → EOA만으로 재시도 (소문자 → checksummed 순으로 시도)
+        if is_10603:
+            try:
+                from eth_account import Account as EthAccount
+                aid = getattr(account, "id", 1)
+                pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
+                if pk:
+                    eoa = EthAccount.from_key(pk).address  # checksummed
+                    for addr in (eoa.lower(), eoa):  # 소문자 먼저, 실패 시 checksummed
+                        retry_client = _get_clob_client(account, multi_sig_override=addr)
+                        if not retry_client:
+                            continue
+                        try:
+                            result = retry_client.place_order(data, check_approval=True)
+                            order_id = None
+                            if hasattr(result, "result") and hasattr(result.result, "data"):
+                                data_obj = result.result.data
+                                order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
+                            if order_id is None and hasattr(result, "result"):
+                                r = result.result
+                                order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
+                            if order_id is None and isinstance(result, dict):
+                                order_id = result.get("order_id") or result.get("id")
+                            if order_id is not None:
+                                logger.info("10603 재시도(EOA %s) 성공 order_id=%s", "lower" if addr == eoa.lower() else "checksum", order_id)
+                                return {"success": True, "order_id": str(order_id), "id": order_id}
+                        except Exception as retry_e:
+                            logger.warning("10603 재시도 addr=%s... 실패: %s", (addr or "")[:10], retry_e)
+            except Exception as outer_e:
+                logger.warning("10603 EOA 재시도 준비 실패: %s", outer_e)
             err_msg = (
-                "지갑 주소가 Opinion에 등록된 계정과 다릅니다. "
-                "OPINION_MULTISIG_1(또는 _2)를 비우고, app.opinion.trade에서 CLOB PK와 같은 지갑으로 연결한 뒤 다시 시도하세요. (docs/OPINION_ERROR_10603.md)"
+                "10603: Opinion이 기대하는 지갑 주소와 다릅니다. "
+                "해결: app.opinion.trade 접속 → 로그인(CLOB PK와 같은 지갑) → My Profile에서 보이는 지갑 주소를 복사 → .env에 OPINION_MULTISIG_1=(그 주소) 넣고 저장 → 서버 재시작(README '운영 시 자주 쓰는 명령어') 후 다시 시도. "
+                "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
             )
         elif hasattr(e, "status") and hasattr(e, "body"):
+            # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
             body = getattr(e, "body", None)
-            if isinstance(body, dict):
-                interpreted = interpret_opinion_api_response(
-                    getattr(e, "status", 500),
-                    body,
-                    context="CLOB 주문",
-                )
-                err_msg = interpreted.get("user_message") or err_msg
+            interpreted = interpret_opinion_api_response(
+                getattr(e, "status", 500),
+                body,
+                context="CLOB 주문",
+            )
+            if interpreted.get("user_message"):
+                err_msg = interpreted["user_message"]
         return {"success": False, "error": err_msg, "order_id": None}
 
 
@@ -252,10 +336,11 @@ def cancel_order(account: OpinionAccount, order_id: str) -> Dict[str, Any]:
         if hasattr(e, "status") and hasattr(e, "body"):
             interpreted = interpret_opinion_api_response(
                 getattr(e, "status", 500),
-                getattr(e, "body", None) if isinstance(getattr(e, "body", None), dict) else None,
+                getattr(e, "body", None),
                 context="CLOB 취소",
             )
-            err_msg = interpreted.get("user_message") or err_msg
+            if interpreted.get("user_message"):
+                err_msg = interpreted["user_message"]
         return {"success": False, "error": err_msg}
 
 

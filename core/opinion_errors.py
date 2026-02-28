@@ -20,6 +20,16 @@ OPINION_API_CODE_MESSAGES = {
     ),
 }
 
+# CLOB 등에서 HTTP 403 시 body.errno로 오는 코드 (code 아님)
+OPINION_ERRNO_MESSAGES = {
+    10403: (
+        "Opinion은 미국·중국 등 제한 지역에서 이용할 수 없습니다(지역 제한). "
+        "서버 로그에서 'CLOB 계정 id=X: 프록시 적용됨'이 보이는지 확인하세요. "
+        "보이면 요청은 프록시를 타고 있으니, 해당 프록시의 나가는 IP가 제한 지역인지 확인 후 다른 프록시로 바꿔 보세요. "
+        "자세한 내용: docs/OPINION_ERROR_10403.md"
+    ),
+}
+
 # HTTP status_code → 사용자용 메시지 (API 프록시/네트워크 단)
 HTTP_STATUS_MESSAGES = {
     400: "잘못된 요청입니다.",
@@ -58,10 +68,29 @@ def interpret_opinion_api_response(
         { "user_message": str, "error_code": int|str, "raw_message": str|None }
     """
     body = body or {}
-    code = body.get("code") if isinstance(body, dict) else None
-    raw_msg = body.get("msg") or body.get("message") or body.get("error") or ""
+    if isinstance(body, str) and body.strip().startswith("{"):
+        try:
+            import json
+            body = json.loads(body)
+        except Exception:
+            body = {}
+    if not isinstance(body, dict):
+        body = {}
+    code = body.get("code")
+    errno = body.get("errno")
+    raw_msg = body.get("msg") or body.get("message") or body.get("error") or body.get("errmsg") or ""
     if isinstance(raw_msg, dict):
         raw_msg = raw_msg.get("message") or str(raw_msg)
+
+    # CLOB 등에서 errno로 오는 경우 (예: 10403 지역 제한)
+    if errno is not None and errno != 0:
+        user_msg = OPINION_ERRNO_MESSAGES.get(int(errno))
+        if user_msg:
+            return {
+                "user_message": user_msg,
+                "error_code": int(errno),
+                "raw_message": raw_msg or None,
+            }
 
     # Opinion 응답 body에 code가 있으면 그걸 우선 해석
     if code is not None and code != 0:
