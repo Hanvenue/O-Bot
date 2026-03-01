@@ -209,9 +209,9 @@ def get_1h_market_for_trade(
         best_ask_yes = _best_price(asks_yes, want_low=True)
         if best_ask_yes is None:
             logger.warning("Yes 호가 없음: token=%s, 응답 키=%s", yes_token[:16] if yes_token else "", list((ob_yes.get("data") or ob_yes).keys()) if isinstance(ob_yes.get("data"), dict) else "n/a")
-            out["trade_reason"] = "Yes 호가 없음 (호가창이 비었거나 응답 형식이 다를 수 있음. 잠시 후 재시도 또는 Opinion 웹에서 해당 마켓 호가 확인)"
-            out["error"] = out["trade_reason"]
-            return out
+            # 호가 비어 있어도 기본가(0.49)로 진행 시도 (CLOB에서 유동성 확인)
+            best_ask_yes = 0.50
+            out["trade_reason"] = "호가창 비어 있어 기본가(50¢)로 주문 시도합니다."
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
     taker_price_down = round(1.0 - maker_price_up, 2)
 
