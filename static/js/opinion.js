@@ -338,7 +338,7 @@ async function loadBtcUpDown(forceRefresh) {
         if (data.success && (data.result !== undefined || data.topicId)) {
             renderBtcUpDownCard(data);
             if (data.market_ended) {
-                _marketEndedRetryTimer = setTimeout(function () { loadBtcUpDown(true); }, 120000);
+                _marketEndedRetryTimer = setTimeout(function () { loadBtcUpDown(true); }, 60000);
             }
         } else {
             box.innerHTML = data.error || '실패';
