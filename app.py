@@ -2,12 +2,26 @@
 오봇 (O-Bot) - Opinion 전용 Flask Application
 경봇(Predict) 코드는 제거됨. 이 레포는 Opinion 다중 로그인·수동/자동 거래만 포함합니다.
 """
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+import os
 import logging
 import re
 import time
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from config import Config
 from core.btc_price import btc_price_service
+from core.opinion_config import get_proxy_dict, get_env_accounts, has_proxy, OPINION_API_KEY, OPINION_PROXY
+
+# BSC RPC가 서버에서 막힐 때 Opinion 프록시로 RPC도 나가게 함 (Web3/requests가 HTTP_PROXY 사용)
+# 비활성화: .env에 BSC_RPC_USE_PROXY=0
+if os.getenv("BSC_RPC_USE_PROXY", "1").strip() != "0":
+    for _aid, _eoa, _ak, _proxy, _ in get_env_accounts():
+        if _proxy and get_proxy_dict(_proxy):
+            _px = get_proxy_dict(_proxy)
+            _url = _px.get("https") or _px.get("http")
+            if _url and not os.environ.get("HTTPS_PROXY"):
+                os.environ["HTTPS_PROXY"] = _url
+                os.environ["HTTP_PROXY"] = _url
+                break
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +86,6 @@ def index():
 
 
 # ---------- Opinion API (다중 로그인) ----------
-from core.opinion_config import has_proxy, OPINION_API_KEY, OPINION_PROXY
 from core.opinion_account import opinion_account_manager
 from core.opinion_client import (
     get_markets,
