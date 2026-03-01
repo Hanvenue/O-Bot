@@ -62,7 +62,7 @@ function updateSharesPriceDisplay() {
     }
     var url = '/api/opinion/manual-trade/status?topic_id=' + encodeURIComponent(topicId) + '&shares=' + shares;
     fetchWithAuth(url)
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (data) {
             if (!data.success && data.error) {
                 totalEl.textContent = data.error;
@@ -139,6 +139,20 @@ async function fetchWithAuth(url, options = {}) {
     return res;
 }
 
+/** 응답이 HTML(에러 페이지)이면 r.json() 대신 이 함수 사용 → 친절한 오류 메시지 */
+function parseJsonResponse(r) {
+    return r.text().then(function (text) {
+        var t = (text || '').trim();
+        if (t.length === 0) return {};
+        if (t.charAt(0) !== '{' && t.charAt(0) !== '[') {
+            if (t.indexOf('<') === 0 || t.indexOf('<!') === 0)
+                throw new Error('서버가 예기치 않은 응답(HTML)을 반환했습니다. 주소 확인 또는 잠시 후 다시 시도해 주세요.');
+            throw new Error('서버 응답 형식 오류. 잠시 후 다시 시도해 주세요.');
+        }
+        try { return JSON.parse(text); } catch (e) { throw new Error('응답 파싱 오류. 잠시 후 다시 시도해 주세요.'); }
+    });
+}
+
 function showProxyAlert(show) {
     const el = document.getElementById('proxyAlert');
     if (el) el.style.display = show ? 'block' : 'none';
@@ -186,8 +200,8 @@ async function loadOpinionAccounts() {
             fetchWithAuth('/api/opinion/proxy-status'),
             fetchWithAuth('/api/opinion/accounts')
         ]);
-        const status = await statusRes.json();
-        const data = await accountsRes.json();
+        const status = await parseJsonResponse(statusRes);
+        const data = await parseJsonResponse(accountsRes);
         showProxyAlert(!status.has_proxy);
         if (data.success && data.accounts) {
             renderAccounts(data.accounts);
@@ -231,7 +245,7 @@ async function submitOpinionLogin(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ private_key: pk, name: name || undefined })
         });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (data.success) {
             closeLoginModal();
             loadOpinionAccounts();
@@ -361,7 +375,7 @@ function updateBtcPriceGapCard() {
     var gapEl = document.getElementById('btcGapGap');
     if (!card || !gapEl) return;
     fetchWithAuth('/api/opinion/btc-price-gap')
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (data) {
             if (data.success) {
                 if (placeholder) placeholder.style.display = 'none';
@@ -406,7 +420,7 @@ function loadOverallChart(metric, range) {
     if (placeholder) { placeholder.style.display = 'block'; }
     var url = '/api/opinion/overall?metric=' + encodeURIComponent(metric) + '&range=' + encodeURIComponent(range);
     fetchWithAuth(url)
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (res) {
             if (placeholder) placeholder.style.display = 'none';
             if (!res.success || !res.labels) {
@@ -502,7 +516,7 @@ function runAutoGo() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shares: shares })
     })
-        .then(function (r) { return r.json().then(function (data) { return { status: r.status, data: data }; }); })
+        .then(function (r) { return parseJsonResponse(r).then(function (data) { return { status: r.status, data: data }; }); })
         .then(function (res) {
             var data = res.data;
             var msg = (data && data.error) ? data.error : (data && data.user_message) ? data.user_message : '자동 Go!를 시작할 수 없습니다.';
@@ -525,7 +539,7 @@ function runAutoStop() {
     var btn = document.getElementById('btnAutoStop');
     if (btn) btn.disabled = true;
     fetchWithAuth('/api/opinion/auto/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (data) {
             if (data && data.success) alert('자동 거래를 중지했습니다.');
             pollOpinionAutoStats();
@@ -538,7 +552,7 @@ function runAutoStop() {
 
 function pollOpinionAutoStats() {
     fetchWithAuth('/api/opinion/auto/stats')
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (data) {
             if (!data || !data.success || !data.stats) return;
             var s = data.stats;
@@ -581,7 +595,7 @@ function runManualGo() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     })
-        .then(function (r) { return r.json(); })
+        .then(function (r) { return parseJsonResponse(r); })
         .then(function (data) {
             if (resultEl) {
                 resultEl.style.display = 'block';
