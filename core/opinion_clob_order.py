@@ -262,6 +262,7 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
+        logger.warning("place order raw exception type=%s repr=%s", type(e).__name__, repr(e)[:500])
         # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
         body = getattr(e, "body", None) if hasattr(e, "body") else None
         is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)

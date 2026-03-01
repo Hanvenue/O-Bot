@@ -131,7 +131,15 @@ def _opinion_auth():
 @app.route('/api/opinion/proxy-status')
 def opinion_proxy_status():
     """프록시 설정 여부. 없으면 UI에서 '프록시를 추가해 주세요' 알림용."""
-    return jsonify({'has_proxy': has_proxy()})
+    out = {'has_proxy': has_proxy()}
+    # BSC RPC 프록시 디버깅: HTTPS_PROXY가 설정돼 있으면 앞 20자만 표시
+    hp = os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY')
+    if hp:
+        out['bsc_rpc_proxy_set'] = True
+        out['bsc_rpc_proxy_preview'] = hp[:30] + '...' if len(hp) > 30 else hp[:20]
+    else:
+        out['bsc_rpc_proxy_set'] = False
+    return jsonify(out)
 
 
 @app.route('/api/opinion/accounts')
