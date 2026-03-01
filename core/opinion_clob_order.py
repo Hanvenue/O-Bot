@@ -25,9 +25,16 @@ _BSC_RPC_FALLBACK_RAW = (os.getenv("BSC_RPC_FALLBACKS") or "").strip()
 BSC_RPC_FALLBACKS = [u.strip() for u in _BSC_RPC_FALLBACK_RAW.split(",") if u.strip()] or [
     "https://bsc-dataseed1.binance.org/",
     "https://bsc-dataseed2.binance.org/",
-    "https://rpc.ankr.com/bsc",
-    "https://bsc-rpc.publicnode.com",
     "https://bsc-dataseed.bnbchain.org",
+    "https://bsc-dataseed-public.bnbchain.org",
+    "https://bsc-rpc.publicnode.com",
+    "https://1rpc.io/bnb",
+    "https://bsc.drpc.org",
+    "https://bsc.publicnode.com",
+    "https://bsc-dataseed.nariox.org",
+    "https://bsc-dataseed.defibit.io",
+    "https://binance.nodereal.io",
+    "https://bsc-mainnet.public.blastapi.io",
 ]
 
 
