@@ -47,7 +47,7 @@ Maker 주문 실패: [10603] Asset owner must be the current multi-signature wal
 ## 4. 5분 해결 (10603 나올 때 바로 하기)
 
 1. 브라우저에서 `https://내서버/api/opinion/clob-debug` 접속 → `multi_sig_addr_sent` 확인.
-2. [app.opinion.trade](https://app.opinion.trade) 로그인(CLOB PK와 같은 지갑) → **My Profile**에서 지갑 주소 **전체** 복사(0x 포함 42자리).
+2. [app.opinion.trade](https://app.opinion.trade) 로그인(CLOB PK와 같은 지갑) → **My Profile** 또는 **Balance spot**에 적힌 지갑 주소 **전체** 복사(0x 포함 42자리). (Profile 주소로 nonce 0 bytes 나오면 **Balance spot** 주소로 바꿔서 시도.)
 3. 서버 `.env`에서 `OPINION_MULTISIG_1=` 또는 `OPINION_MULTISIG_2=` 뒤에 **그 주소 그대로** 붙여넣기.
 4. 서버 재시작 (README 운영 명령어: `sudo systemctl restart obot`).
 5. 다시 수동 Go! → My Profile 주소와 3번이 **완전히 같아야** 함.
