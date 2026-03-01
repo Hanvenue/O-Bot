@@ -129,8 +129,11 @@ def get_latest_bitcoin_up_down_topic_id(force_refresh: bool = False) -> Optional
     topic_id = chosen.get("marketId")
     if topic_id is not None:
         _last_failure_reason = None
-        _CACHE = (int(topic_id), chosen, now + _CACHE_TTL)
-        logger.info("Bitcoin Up or Down 최신 topicId=%s (캐시 %ds, 종료 후 자동 무효)", topic_id, _CACHE_TTL)
+        chosen_cutoff = _cutoff_ts(chosen)
+        # 이미 종료된 마켓이면 캐시 안 함(다음 요청에서 바로 재조회 → 새 시장 빨리 반영)
+        cache_ttl = 0 if chosen_cutoff < now else _CACHE_TTL
+        _CACHE = (int(topic_id), chosen, now + cache_ttl)
+        logger.info("Bitcoin Up or Down 최신 topicId=%s (캐시 %ds, 종료 후 자동 무효)", topic_id, cache_ttl)
     else:
         _last_failure_reason = "마켓 데이터에 marketId 없음"
     return topic_id

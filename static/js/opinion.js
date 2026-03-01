@@ -334,6 +334,10 @@ async function loadBtcUpDown(forceRefresh) {
         }
         if (data.success && (data.result !== undefined || data.topicId)) {
             renderBtcUpDownCard(data);
+            if (window._btcUpDownRetryTimer) { clearTimeout(window._btcUpDownRetryTimer); window._btcUpDownRetryTimer = null; }
+            if (data.market_ended) {
+                window._btcUpDownRetryTimer = setTimeout(function () { loadBtcUpDown(true); }, 60000);
+            }
         } else {
             box.innerHTML = data.error || '실패';
             box.style.background = '#f8d7da';
