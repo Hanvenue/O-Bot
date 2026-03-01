@@ -122,10 +122,10 @@ _start_ws_background()  # 모듈 임포트 시 한 번 실행
 
 
 def _opinion_auth():
-    """Opinion 읽기용 API키·프록시. 없으면 (None, None)."""
-    if not OPINION_API_KEY or not has_proxy():
+    """Opinion 읽기용 API키·프록시. API 키만 있으면 동작 (프록시는 선택, VPN 사용 시 None)."""
+    if not OPINION_API_KEY:
         return None, None
-    return OPINION_API_KEY, OPINION_PROXY
+    return OPINION_API_KEY, (OPINION_PROXY or None)
 
 
 @app.route('/api/opinion/proxy-status')
@@ -201,7 +201,7 @@ def opinion_btc_up_down():
     try:
         api_key, proxy = _opinion_auth()
         if not api_key:
-            return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+            return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
         force_refresh = request.args.get('refresh') in ('1', 'true', 'yes')
         topic_id, market = get_latest_bitcoin_up_down_market(force_refresh=force_refresh)
         if not topic_id:
@@ -569,7 +569,7 @@ def opinion_overall():
         if metric == 'volume':
             out = _opinion_overall_volume(range_key)
             if out is None:
-                return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+                return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
             return jsonify({'success': True, 'metric': 'volume', 'range': range_key, **out})
         return jsonify({'success': False, 'error': 'metric은 volume 또는 usdt여야 합니다.'}), 400
     except Exception as e:
@@ -582,7 +582,7 @@ def opinion_markets():
     """시장 목록. Query: status, sortBy, page, limit (기본 activated, 20개)."""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     status = request.args.get('status', 'activated')
     sort_by = request.args.get('sortBy', type=int)
     page = request.args.get('page', 1, type=int)
@@ -599,7 +599,7 @@ def opinion_market_detail(market_id):
     """시장 상세. GET /market/{marketId}"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     res = get_market(market_id, api_key, proxy)
     if not res.get('ok'):
         return jsonify({'success': False, 'error': res.get('data') or res.get('error', 'API 오류')}), 502
@@ -611,7 +611,7 @@ def opinion_token_latest_price():
     """토큰 최신 가격. Query: token_id"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     token_id = request.args.get('token_id', '').strip()
     if not token_id:
         return jsonify({'success': False, 'error': 'token_id 필요'}), 400
@@ -626,7 +626,7 @@ def opinion_token_orderbook():
     """토큰 호가창. Query: token_id, market_id(선택 — WS 캐시 우선)"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     token_id = request.args.get('token_id', '').strip()
     if not token_id:
         return jsonify({'success': False, 'error': 'token_id 필요'}), 400
@@ -651,7 +651,7 @@ def opinion_token_price_history():
     """가격 히스토리. Query: token_id, interval (기본 1d)"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     token_id = request.args.get('token_id', '').strip()
     if not token_id:
         return jsonify({'success': False, 'error': 'token_id 필요'}), 400
@@ -667,7 +667,7 @@ def opinion_quote_tokens():
     """거래 통화 목록. GET /quoteToken"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     res = get_quote_tokens(api_key, proxy)
     if not res.get('ok'):
         return jsonify({'success': False, 'error': res.get('data') or res.get('error', 'API 오류')}), 502
@@ -679,7 +679,7 @@ def opinion_positions(wallet_address):
     """특정 지갑 포지션. Query: page, limit"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 20, type=int)
     limit = min(max(1, limit), 20)
@@ -694,7 +694,7 @@ def opinion_trades(wallet_address):
     """특정 지갑 거래 내역. Query: page, limit"""
     api_key, proxy = _opinion_auth()
     if not api_key:
-        return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
+        return jsonify({'success': False, 'error': 'API 키를 설정해 주세요 (.env OPINION_API_KEY).'}), 400
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 20, type=int)
     limit = min(max(1, limit), 20)

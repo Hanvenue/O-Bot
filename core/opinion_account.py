@@ -15,7 +15,6 @@ from core.opinion_config import (
     OPINION_API_KEY,
     OPINION_DEFAULT_EOA,
     get_env_accounts,
-    has_proxy,
 )
 from core.opinion_client import get_positions, get_trades
 from core.opinion_geo import get_country_for_ip
@@ -209,16 +208,9 @@ class OpinionAccountManager:
     def login_with_pk(self, private_key: str, name: Optional[str] = None) -> Dict[str, Any]:
         """
         PK로 로그인 시도.
-        - 프록시 없으면 에러 (프록시를 추가해 주세요)
         - EOA 도출 후, 디폴트 EOA와 같으면 디폴트 API키 사용.
-        - positions + trades 호출해서 리턴값 전부 반환.
+        - positions + trades 호출 (프록시 없이 VPN 사용 시에도 동작).
         """
-        if not has_proxy():
-            return {
-                "success": False,
-                "error": "프록시를 추가해 주세요.",
-                "code": "NO_PROXY",
-            }
         eoa = _eoa_from_pk(private_key)
         if not eoa:
             return {"success": False, "error": "유효한 지갑 Private Key가 아닙니다.", "code": "INVALID_PK"}
