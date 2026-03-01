@@ -251,14 +251,21 @@ def _place_order_impl(
                 order_id = getattr(data_obj, "order_id", None)
             if order_id is None and hasattr(data_obj, "id"):
                 order_id = getattr(data_obj, "id", None)
+            if order_id is None and hasattr(data_obj, "orderId"):
+                order_id = getattr(data_obj, "orderId", None)
+            if order_id is None and isinstance(data_obj, dict):
+                order_id = (data_obj.get("order_id") or data_obj.get("orderId") or data_obj.get("id"))
         if order_id is None and hasattr(result, "result"):
             r = result.result
             if hasattr(r, "order_id"):
                 order_id = r.order_id
+            elif hasattr(r, "orderId"):
+                order_id = r.orderId
             elif isinstance(getattr(r, "data", None), dict):
-                order_id = (r.data or {}).get("order_id") or (r.data or {}).get("id")
+                d = r.data or {}
+                order_id = d.get("order_id") or d.get("orderId") or d.get("id")
         if order_id is None and isinstance(result, dict):
-            order_id = result.get("order_id") or result.get("id")
+            order_id = result.get("order_id") or result.get("orderId") or result.get("id")
         return {"success": True, "order_id": str(order_id) if order_id else None, "id": order_id}
     except Exception as e:
         err_msg = str(e)

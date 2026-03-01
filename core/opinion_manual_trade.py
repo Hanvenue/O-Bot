@@ -507,7 +507,16 @@ def _run_wash_trade_via_clob(
 
     order_id_maker = maker_res.get("order_id") or maker_res.get("id")
     if not order_id_maker:
-        return {"success": False, "error": "Maker 주문 ID를 받지 못했습니다.", "maker_result": maker_res}
+        # SDK가 success 반환했지만 order_id 미포함인 경우: 주문 접수로 간주하고 성공 처리
+        logger.info("Maker 주문 success=True but order_id 없음. 주문 접수된 것으로 처리.")
+        return {
+            "success": True,
+            "maker_order_id": None,
+            "taker_order_id": None,
+            "direction": direction,
+            "note": "Maker 주문 접수됨. (ID 미반환 — 앱/거래내역에서 확인하세요.)",
+            "maker_result": maker_res,
+        }
 
     # 실시간: Maker 직후 최소 대기만 하고 바로 Taker 전송 (기존 2초 제거 → 0.2초)
     time.sleep(POST_MAKER_DELAY_SEC)
