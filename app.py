@@ -198,9 +198,12 @@ def opinion_btc_up_down():
         # 이미 종료된 구간이면 안내 문구 (다음 1시간 마켓이 아직 안 열렸을 수 있음)
         payload = {'success': True, 'topicId': topic_id, 'result': market}
         cutoff_sec = _opinion_cutoff_seconds(market)
-        if cutoff_sec is not None and cutoff_sec < int(time.time()):
-            payload['market_ended'] = True
-            payload['notice'] = '이 구간은 종료되었습니다. 다음 1시간 마켓이 Opinion에 아직 열리지 않았을 수 있어요. 1~2분 뒤 위 "불러오기"를 눌러 보세요.'
+        if cutoff_sec is not None:
+            slug = _opinion_market_slug_et(cutoff_sec)
+            payload['market_url'] = f"https://app.opinion.trade/market/{slug}"
+            if cutoff_sec < int(time.time()):
+                payload['market_ended'] = True
+                payload['notice'] = '이 구간은 종료되었습니다. 다음 1시간 마켓이 Opinion에 아직 열리지 않았을 수 있어요. 1~2분 뒤 위 "불러오기"를 눌러 보세요.'
         return jsonify(payload)
     except Exception as e:
         logger.exception('btc-up-down error: %s', e)
@@ -231,6 +234,15 @@ def _format_close_kst(cutoff_sec: int) -> str:
     from zoneinfo import ZoneInfo
     dt = datetime.fromtimestamp(cutoff_sec, tz=ZoneInfo("Asia/Seoul"))
     return dt.strftime("%b %d, %Y %H:%M KST Close")
+
+
+def _opinion_market_slug_et(cutoff_sec: int) -> str:
+    """cutoff(Unix) → ET 기준 slug: bitcoin-up-or-down-on-march-1-12-00-et"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    dt = datetime.fromtimestamp(cutoff_sec, tz=ZoneInfo("America/New_York"))
+    month = dt.strftime("%B").lower()
+    return f"bitcoin-up-or-down-on-{month}-{dt.day}-{dt.hour:02d}-{dt.minute:02d}-et"
 
 
 def _opinion_market_start_timestamp(market: dict) -> int | None:
