@@ -37,6 +37,16 @@ _CONTRACT_ERR_KEYWORDS = (
     "contract function",
 )
 
+# USDT 승인 미완료 에러 키워드 (check_approval=False로 주문 시 발생 가능)
+_APPROVAL_ERR_KEYWORDS = (
+    "allowance",
+    "approve",
+    "enable_trading",
+    "not approved",
+    "transfer amount exceeds",
+    "insufficient allowance",
+)
+
 
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
@@ -220,115 +230,120 @@ def _place_order_impl(
             price=sdk_price,
             makerAmountInQuoteToken=str(round(amount_quote, 2)),
         )
-        # check_approval=True: SDK가 enable_trading() 자동 실행 → USDT 사용 승인 트랜잭션
-        result = client.place_order(data, check_approval=True)
-        order_id = None
-        if hasattr(result, "result") and hasattr(result.result, "data"):
-            data_obj = result.result.data
-            if hasattr(data_obj, "order_id"):
-                order_id = getattr(data_obj, "order_id", None)
-            if order_id is None and hasattr(data_obj, "id"):
-                order_id = getattr(data_obj, "id", None)
-        if order_id is None and hasattr(result, "result"):
-            r = result.result
-            if hasattr(r, "order_id"):
-                order_id = r.order_id
-            elif isinstance(getattr(r, "data", None), dict):
-                order_id = (r.data or {}).get("order_id") or (r.data or {}).get("id")
-        if order_id is None and isinstance(result, dict):
-            order_id = result.get("order_id") or result.get("id")
-        return {"success": True, "order_id": str(order_id) if order_id else None, "id": order_id}
-    except Exception as e:
-        err_msg = str(e)
-        logger.exception("place order error: %s", err_msg)
+    except Exception as build_e:
+        return {"success": False, "error": f"주문 데이터 생성 실패: {build_e}", "order_id": None}
 
-        # BSC RPC 불안정 (컨트랙트 호출 실패) → 폴백 RPC로 재시도
-        is_contract_err = any(kw in err_msg.lower() for kw in _CONTRACT_ERR_KEYWORDS)
-        if is_contract_err:
-            logger.warning("BSC RPC 컨트랙트 에러 감지. 폴백 RPC 순서로 재시도합니다.")
-            for fallback_rpc in _BSC_RPC_FALLBACKS:
-                if fallback_rpc == BSC_RPC_URL:
+    def _parse_order_id(res) -> Optional[str]:
+        """place_order 결과에서 order_id 추출."""
+        oid = None
+        if hasattr(res, "result") and hasattr(res.result, "data"):
+            d = res.result.data
+            oid = getattr(d, "order_id", None) or getattr(d, "id", None)
+        if oid is None and hasattr(res, "result"):
+            r = res.result
+            oid = getattr(r, "order_id", None)
+            if oid is None and isinstance(getattr(r, "data", None), dict):
+                oid = (r.data or {}).get("order_id") or (r.data or {}).get("id")
+        if oid is None and isinstance(res, dict):
+            oid = res.get("order_id") or res.get("id")
+        return str(oid) if oid is not None else None
+
+    def _try_with_approval(c, approval: bool) -> Dict[str, Any]:
+        """단일 클라이언트로 place_order 시도, 성공 시 {"success": True, ...} 반환."""
+        result = c.place_order(data, check_approval=approval)
+        oid = _parse_order_id(result)
+        return {"success": True, "order_id": oid, "id": oid}
+
+    # 1차 시도: check_approval=False → BSC RPC 불필요, 이미 승인된 계정은 바로 성공
+    try:
+        return _try_with_approval(client, approval=False)
+    except Exception as e1:
+        e1_msg = str(e1)
+        needs_approval = any(kw in e1_msg.lower() for kw in _APPROVAL_ERR_KEYWORDS)
+        is_contract_err = any(kw in e1_msg.lower() for kw in _CONTRACT_ERR_KEYWORDS)
+        if not needs_approval and not is_contract_err:
+            # 승인·컨트랙트와 무관한 에러(10603, HTTP 등) → 아래 공통 에러 핸들러로
+            logger.warning("place order error (no-approval attempt): %s", e1_msg)
+            e = e1
+            err_msg = e1_msg
+        else:
+            # USDT 미승인 또는 컨트랙트 에러 → check_approval=True + RPC 폴백으로 재시도
+            logger.info("check_approval=False 실패(%s). check_approval=True + RPC 폴백 재시도.", "승인필요" if needs_approval else "RPC에러")
+            e = e1
+            err_msg = e1_msg
+
+    # 2차 시도: check_approval=True, primary RPC
+    try:
+        return _try_with_approval(client, approval=True)
+    except Exception as e2:
+        err_msg = str(e2)
+        logger.exception("place order error (with-approval attempt): %s", err_msg)
+        e = e2
+
+    # BSC RPC 불안정 (컨트랙트 호출 실패) → 폴백 RPC로 재시도
+    is_contract_err = any(kw in err_msg.lower() for kw in _CONTRACT_ERR_KEYWORDS)
+    if is_contract_err:
+        logger.warning("BSC RPC 컨트랙트 에러 감지. 폴백 RPC 순서로 재시도합니다.")
+        for fallback_rpc in _BSC_RPC_FALLBACKS:
+            if fallback_rpc == BSC_RPC_URL:
+                continue
+            try:
+                retry_client = _get_clob_client(account, rpc_url_override=fallback_rpc)
+                if not retry_client:
                     continue
-                try:
-                    retry_client = _get_clob_client(account, rpc_url_override=fallback_rpc)
+                return _try_with_approval(retry_client, approval=True)
+            except Exception as fallback_e:
+                logger.warning("BSC RPC 폴백 실패 (rpc=%s): %s", fallback_rpc, fallback_e)
+        err_msg = (
+            "BSC 네트워크 연결 실패: USDT 사용 승인 트랜잭션을 보낼 수 없습니다. "
+            "BSC RPC 엔드포인트가 모두 불안정합니다. 잠시 후 다시 시도하거나, "
+            ".env에 BSC_RPC_URL=<안정적인 RPC URL>을 설정해 주세요. "
+            "(예: https://bsc-dataseed1.ninicoin.io/ 또는 Ankr/QuickNode BSC 엔드포인트)"
+        )
+        return {"success": False, "error": err_msg, "order_id": None}
+
+    # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
+    body = getattr(e, "body", None) if hasattr(e, "body") else None
+    is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
+    if is_10603 and isinstance(body, dict):
+        logger.warning("10603 응답 body (기대 주소 확인용): %s", body)
+    # 10603: MULTISIG 불일치 → EOA만으로 재시도 (소문자 → checksummed 순으로 시도)
+    if is_10603:
+        try:
+            from eth_account import Account as EthAccount
+            aid = getattr(account, "id", 1)
+            pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
+            if pk:
+                eoa = EthAccount.from_key(pk).address  # checksummed
+                for addr in (eoa.lower(), eoa):  # 소문자 먼저, 실패 시 checksummed
+                    retry_client = _get_clob_client(account, multi_sig_override=addr)
                     if not retry_client:
                         continue
-                    result = retry_client.place_order(data, check_approval=True)
-                    order_id = None
-                    if hasattr(result, "result") and hasattr(result.result, "data"):
-                        data_obj = result.result.data
-                        order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
-                    if order_id is None and hasattr(result, "result"):
-                        r = result.result
-                        order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and ((r.data or {}).get("order_id") or (r.data or {}).get("id")))
-                    if order_id is None and isinstance(result, dict):
-                        order_id = result.get("order_id") or result.get("id")
-                    if order_id is not None:
-                        logger.info("BSC RPC 폴백 성공 (rpc=%s) order_id=%s", fallback_rpc, order_id)
-                        return {"success": True, "order_id": str(order_id), "id": order_id}
-                    # order_id 없어도 성공 응답이면 반환
-                    return {"success": True, "order_id": None, "id": None}
-                except Exception as fallback_e:
-                    logger.warning("BSC RPC 폴백 실패 (rpc=%s): %s", fallback_rpc, fallback_e)
-            err_msg = (
-                "BSC 네트워크 연결 실패: USDT 사용 승인 트랜잭션을 보낼 수 없습니다. "
-                "BSC RPC 엔드포인트가 모두 불안정합니다. 잠시 후 다시 시도하거나, "
-                ".env에 BSC_RPC_URL=<안정적인 RPC URL>을 설정해 주세요. "
-                "(예: https://bsc-dataseed1.ninicoin.io/ 또는 Ankr/QuickNode BSC 엔드포인트)"
-            )
-            return {"success": False, "error": err_msg, "order_id": None}
-
-        # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
-        body = getattr(e, "body", None) if hasattr(e, "body") else None
-        is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
-        if is_10603 and isinstance(body, dict):
-            logger.warning("10603 응답 body (기대 주소 확인용): %s", body)
-        # 10603: MULTISIG 불일치 → EOA만으로 재시도 (소문자 → checksummed 순으로 시도)
-        if is_10603:
-            try:
-                from eth_account import Account as EthAccount
-                aid = getattr(account, "id", 1)
-                pk = (os.getenv(f"OPINION_CLOB_PK_{aid}") or "").strip()
-                if pk:
-                    eoa = EthAccount.from_key(pk).address  # checksummed
-                    for addr in (eoa.lower(), eoa):  # 소문자 먼저, 실패 시 checksummed
-                        retry_client = _get_clob_client(account, multi_sig_override=addr)
-                        if not retry_client:
-                            continue
-                        try:
-                            result = retry_client.place_order(data, check_approval=True)
-                            order_id = None
-                            if hasattr(result, "result") and hasattr(result.result, "data"):
-                                data_obj = result.result.data
-                                order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
-                            if order_id is None and hasattr(result, "result"):
-                                r = result.result
-                                order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
-                            if order_id is None and isinstance(result, dict):
-                                order_id = result.get("order_id") or result.get("id")
-                            if order_id is not None:
-                                logger.info("10603 재시도(EOA %s) 성공 order_id=%s", "lower" if addr == eoa.lower() else "checksum", order_id)
-                                return {"success": True, "order_id": str(order_id), "id": order_id}
-                        except Exception as retry_e:
-                            logger.warning("10603 재시도 addr=%s... 실패: %s", (addr or "")[:10], retry_e)
-            except Exception as outer_e:
-                logger.warning("10603 EOA 재시도 준비 실패: %s", outer_e)
-            err_msg = (
-                "10603: Opinion이 기대하는 지갑 주소와 다릅니다. "
-                "해결: app.opinion.trade 접속 → 로그인(CLOB PK와 같은 지갑) → My Profile에서 보이는 지갑 주소를 복사 → .env에 OPINION_MULTISIG_1=(그 주소) 넣고 저장 → 서버 재시작(README '운영 시 자주 쓰는 명령어') 후 다시 시도. "
-                "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
-            )
-        elif hasattr(e, "status") and hasattr(e, "body"):
-            # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
-            body = getattr(e, "body", None)
-            interpreted = interpret_opinion_api_response(
-                getattr(e, "status", 500),
-                body,
-                context="CLOB 주문",
-            )
-            if interpreted.get("user_message"):
-                err_msg = interpreted["user_message"]
-        return {"success": False, "error": err_msg, "order_id": None}
+                    try:
+                        res = _try_with_approval(retry_client, approval=True)
+                        if res.get("success"):
+                            logger.info("10603 재시도(EOA %s) 성공", "lower" if addr == eoa.lower() else "checksum")
+                            return res
+                    except Exception as retry_e:
+                        logger.warning("10603 재시도 addr=%s... 실패: %s", (addr or "")[:10], retry_e)
+        except Exception as outer_e:
+            logger.warning("10603 EOA 재시도 준비 실패: %s", outer_e)
+        err_msg = (
+            "10603: Opinion이 기대하는 지갑 주소와 다릅니다. "
+            "해결: app.opinion.trade 접속 → 로그인(CLOB PK와 같은 지갑) → My Profile에서 보이는 지갑 주소를 복사 → .env에 OPINION_MULTISIG_1=(그 주소) 넣고 저장 → 서버 재시작(README '운영 시 자주 쓰는 명령어') 후 다시 시도. "
+            "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
+        )
+    elif hasattr(e, "status") and hasattr(e, "body"):
+        # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
+        body = getattr(e, "body", None)
+        interpreted = interpret_opinion_api_response(
+            getattr(e, "status", 500),
+            body,
+            context="CLOB 주문",
+        )
+        if interpreted.get("user_message"):
+            err_msg = interpreted["user_message"]
+    return {"success": False, "error": err_msg, "order_id": None}
 
 
 def place_limit_order(
