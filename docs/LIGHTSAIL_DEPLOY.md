@@ -84,7 +84,9 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/O-Bot
 EnvironmentFile=/home/ubuntu/O-Bot/.env
-ExecStart=/home/ubuntu/O-Bot/venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 90 app:app
+# BSC RPC가 막힌 서버: 래퍼 스크립트가 OPINION_PROXY를 HTTPS_PROXY로 넣어서 gunicorn 실행
+ExecStart=/home/ubuntu/O-Bot/scripts/run_obot_gunicorn.sh
+# 또는 직접 실행: ExecStart=/home/ubuntu/O-Bot/venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 90 app:app
 Restart=always
 
 [Install]
