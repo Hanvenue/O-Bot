@@ -211,10 +211,12 @@ def _place_order_impl(
         }
 
     side_val = OrderSide.BUY if (side or "BUY").strip().upper() == "BUY" else OrderSide.SELL
-    amount_quote = max(0.01, float(price) * max(1, int(size)))
+    amount_quote = max(1.0, float(price) * max(1, int(size)))
     order_type = MARKET_ORDER if order_type_name == "MARKET_ORDER" else LIMIT_ORDER
     # MARKET 주문 시 SDK에 넘기는 price는 1.0(슬리피지 상한 최대). amount_quote는 원래 price 기준 유지.
     sdk_price = "1.0" if order_type_name == "MARKET_ORDER" else str(round(float(price), 2))
+    # makerAmountInQuoteToken must be at least 1 (USDT). 정수로 올려서 전달.
+    amount_str = str(max(1, int(round(amount_quote))))
 
     try:
         data = PlaceOrderDataInput(
@@ -223,7 +225,7 @@ def _place_order_impl(
             side=side_val,
             orderType=order_type,
             price=sdk_price,
-            makerAmountInQuoteToken=str(round(amount_quote, 2)),
+            makerAmountInQuoteToken=amount_str,
         )
         # check_approval=True: SDK가 enable_trading() 자동 실행 → USDT 사용 승인 트랜잭션
         result = client.place_order(data, check_approval=True)
