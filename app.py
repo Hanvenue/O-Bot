@@ -200,7 +200,7 @@ def opinion_btc_up_down():
         cutoff_sec = _opinion_cutoff_seconds(market)
         if cutoff_sec is not None and cutoff_sec < int(time.time()):
             payload['market_ended'] = True
-            payload['notice'] = '이 구간은 종료되었습니다. 다음 1시간 마켓이 Opinion에 아직 열리지 않았을 수 있어요.'
+            payload['notice'] = '이 구간은 종료되었습니다. 다음 1시간 마켓이 Opinion에 아직 열리지 않았을 수 있어요. 1~2분 뒤 위 "불러오기"를 눌러 보세요.'
         return jsonify(payload)
     except Exception as e:
         logger.exception('btc-up-down error: %s', e)
