@@ -60,12 +60,38 @@ def get_env_accounts() -> List[Tuple[int, str, str, str, bool]]:
 def get_proxy_dict(proxy_str: str):
     """
     프록시 문자열 → requests용 dict.
-    지원 형식: IP:PORT:USER:PASS, USER:PASS@IP:PORT, IP:PORT(인증 없음).
+    지원 형식:
+      HTTP  : IP:PORT:USER:PASS, USER:PASS@IP:PORT, IP:PORT(인증 없음)
+      SOCKS5: socks5://USER:PASS@IP:PORT  (URL 형식, 주거용/VPN 프록시)
+              socks5:IP:PORT:USER:PASS    (단축 형식)
+              socks5:IP:PORT              (인증 없음)
+    SOCKS5 사용 시 PySocks 패키지 필요: pip install PySocks>=1.7.1
     """
     s = (proxy_str or "").strip().strip('"\'')
     if not s or ":" not in s:
         return None
-    # USER:PASS@IP:PORT
+
+    # SOCKS5 — socks5://... URL 형식
+    if s.lower().startswith("socks5://"):
+        return {"http": s, "https": s}
+
+    # SOCKS5 — socks5:IP:PORT[:USER:PASS] 단축 형식
+    if s.lower().startswith("socks5:"):
+        rest = s[len("socks5:"):]
+        parts = rest.split(":")
+        if len(parts) == 2:
+            ip, port = parts[0].strip(), parts[1].strip()
+            if ip and port:
+                url = f"socks5://{ip}:{port}"
+                return {"http": url, "https": url}
+        elif len(parts) == 4:
+            ip, port, user, password = [p.strip() for p in parts]
+            if ip and port and user:
+                url = f"socks5://{user}:{password}@{ip}:{port}"
+                return {"http": url, "https": url}
+        return None
+
+    # HTTP — USER:PASS@IP:PORT
     if "@" in s:
         try:
             user_pass, host_port = s.split("@", 1)
@@ -77,15 +103,16 @@ def get_proxy_dict(proxy_str: str):
         except (ValueError, IndexError):
             pass
         return None
+
     parts = s.split(":")
-    # IP:PORT (인증 없음, 2부분)
+    # HTTP — IP:PORT (인증 없음, 2부분)
     if len(parts) == 2:
         ip, port = parts[0].strip(), parts[1].strip()
         if ip and port:
             url = f"http://{ip}:{port}"
             return {"http": url, "https": url}
         return None
-    # IP:PORT:USER:PASS (정확히 4부분)
+    # HTTP — IP:PORT:USER:PASS (정확히 4부분)
     if len(parts) != 4:
         return None
     ip, port, user, password = parts
