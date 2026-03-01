@@ -145,17 +145,20 @@
             flex-shrink: 0;
             width: 120px;
             height: 120px;
-            border-radius: 12px;
+            border-radius: 50%;
             overflow: hidden;
             background: #f0f0f0;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
         }
         .last-trade-card .pepe-wrap img {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
+            /* 검정 배경을 약간 밝게 해 카드와 덜 어긋나 보이게 */
+            filter: brightness(1.12);
         }
         .last-trade-card .pepe-wrap.state-success { background: #d4edda; }
         .last-trade-card .pepe-wrap.state-fail { background: #f8d7da; }
@@ -174,6 +177,8 @@
         .overall-chart-wrap { position: relative; min-height: 200px; }
         .overall-chart-wrap canvas { max-width: 100%; }
         .overall-placeholder { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #999; margin: 0; }
+        .overall-trade-table th, .overall-trade-table td { border: 1px solid #eee; padding: 6px 8px; text-align: left; }
+        .overall-trade-table th { background: #f5f5f5; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -270,6 +275,14 @@
 
             <h3 style="margin-top: 36px;">Overall</h3>
             <div id="overallCard" class="overall-card">
+                <div id="overallTradeSummary" class="overall-trade-summary" style="margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 0.95rem;">거래 결과 누적</h4>
+                    <p id="overallTradeSummaryText" style="margin: 0; font-size: 0.9rem; color: #555;">로딩 중...</p>
+                    <table id="overallTradeTable" class="overall-trade-table" style="margin-top: 12px; width: 100%; font-size: 0.8rem; border-collapse: collapse; display: none;">
+                        <thead><tr><th>시각</th><th>방향</th><th>Shares</th><th>Maker $</th><th>Taker $</th><th>구분</th><th>결과</th></tr></thead>
+                        <tbody id="overallTradeTableBody"></tbody>
+                    </table>
+                </div>
                 <div class="overall-controls">
                     <div class="overall-metric">
                         <span class="overall-label">표시</span>

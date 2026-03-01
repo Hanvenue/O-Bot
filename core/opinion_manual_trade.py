@@ -503,7 +503,16 @@ def _run_wash_trade_via_clob(
             "success": False,
             "error": f"Maker 주문 실패: {maker_res.get('error')}",
             "maker_result": maker_res,
+            "direction": direction,
+            "maker_price": maker_price,
+            "taker_price": taker_price,
+            "shares": shares,
+            "maker_amount_usd": round(shares * maker_price, 2),
+            "taker_amount_usd": 0,
         }
+
+    maker_amount_usd = round(shares * maker_price, 2)
+    taker_amount_usd = round(shares * taker_price, 2)
 
     order_id_maker = maker_res.get("order_id") or maker_res.get("id")
     if not order_id_maker:
@@ -514,6 +523,11 @@ def _run_wash_trade_via_clob(
             "maker_order_id": None,
             "taker_order_id": None,
             "direction": direction,
+            "maker_price": maker_price,
+            "taker_price": taker_price,
+            "shares": shares,
+            "maker_amount_usd": maker_amount_usd,
+            "taker_amount_usd": taker_amount_usd,
             "note": "Maker 주문 접수됨. (ID 미반환 — 앱/거래내역에서 확인하세요.)",
             "maker_result": maker_res,
         }
@@ -540,6 +554,13 @@ def _run_wash_trade_via_clob(
             "success": False,
             "error": f"Taker 주문 실패: {taker_res.get('error')}",
             "taker_result": taker_res,
+            "maker_order_id": order_id_maker,
+            "direction": direction,
+            "maker_price": maker_price,
+            "taker_price": taker_price,
+            "shares": shares,
+            "maker_amount_usd": round(shares * maker_price, 2),
+            "taker_amount_usd": round(shares * taker_price, 2),
         }
 
     order_id_taker = taker_res.get("order_id") or taker_res.get("id")
@@ -548,7 +569,18 @@ def _run_wash_trade_via_clob(
             cancel_order(maker_account, order_id_maker)
         except Exception:
             pass
-        return {"success": False, "error": "Taker 주문 ID를 받지 못했습니다.", "taker_result": taker_res}
+        return {
+            "success": False,
+            "error": "Taker 주문 ID를 받지 못했습니다.",
+            "taker_result": taker_res,
+            "maker_order_id": order_id_maker,
+            "direction": direction,
+            "maker_price": maker_price,
+            "taker_price": taker_price,
+            "shares": shares,
+            "maker_amount_usd": round(shares * maker_price, 2),
+            "taker_amount_usd": round(shares * taker_price, 2),
+        }
 
     # 3) 체결 확인 (폴링 간격 단축으로 실시간에 가깝게 감지)
     deadline = time.time() + WASH_TRADE_POLL_TIMEOUT_SEC
@@ -569,6 +601,8 @@ def _run_wash_trade_via_clob(
                 "maker_price": maker_price,
                 "taker_price": taker_price,
                 "shares": shares,
+                "maker_amount_usd": round(shares * maker_price, 2),
+                "taker_amount_usd": round(shares * taker_price, 2),
             }
         time.sleep(interval)
 
@@ -586,4 +620,10 @@ def _run_wash_trade_via_clob(
         "error": f"미체결: {int(WASH_TRADE_POLL_TIMEOUT_SEC)}초 내 양쪽 체결되지 않아 주문을 취소했습니다.",
         "maker_order_id": order_id_maker,
         "taker_order_id": order_id_taker,
+        "direction": direction,
+        "maker_price": maker_price,
+        "taker_price": taker_price,
+        "shares": shares,
+        "maker_amount_usd": round(shares * maker_price, 2),
+        "taker_amount_usd": round(shares * taker_price, 2),
     }

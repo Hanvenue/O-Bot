@@ -21,9 +21,7 @@ class OpinionAutoTrader:
 
     def __init__(self):
         self.is_running = False
-        self.check_interval = 15  # 15초마다 조건 검사
-        self.last_trade_time: Optional[datetime] = None
-        self.trade_cooldown = 90  # 거래 후 90초 쿨다운
+        self.interval_seconds = 3600  # 1시간마다 1회 거래
         self.shares_per_trade = 10
         self.maker_account_id: Optional[int] = None
 
@@ -65,44 +63,28 @@ class OpinionAutoTrader:
         logger.info("Opinion auto trader stopped")
         return {"success": True}
 
-    def _can_trade(self) -> bool:
-        if not self.last_trade_time:
-            return True
-        elapsed = (datetime.now() - self.last_trade_time).total_seconds()
-        return elapsed >= self.trade_cooldown
-
     def _loop(self):
-        """주기적으로 1시간 마켓 조건 검사 후, trade_ready면 실행. (스레드에서 실행)"""
+        """1시간마다 1회 자동 거래 (표시된 Share만큼). 스레드에서 실행."""
+        import time as _time
         while self.is_running:
             try:
-                if not self._can_trade():
-                    time.sleep(self.check_interval)
-                    continue
+                _time.sleep(self.interval_seconds)
+                if not self.is_running:
+                    break
 
-                # 시간/갭 제한 적용 (종료 TIME_BEFORE_END 초 전부터만 진입)
                 status = get_1h_market_for_trade(
                     topic_id=None,
                     skip_time_check=False,
                     shares=self.shares_per_trade,
                 )
-
                 if not status.get("trade_ready"):
-                    reason = status.get("trade_reason") or status.get("error") or "대기 중"
-                    logger.debug("Opinion auto: %s", reason)
-                    time.sleep(self.check_interval)
+                    logger.info("Opinion auto: 조건 미충족, 다음 1시간 후 재시도. %s", status.get("trade_reason") or status.get("error"))
                     continue
-
                 topic_id = status.get("topic_id")
                 if not topic_id:
-                    time.sleep(self.check_interval)
                     continue
 
-                logger.info(
-                    "Opinion auto: 조건 충족 topic_id=%s direction=%s",
-                    topic_id,
-                    status.get("trade_direction"),
-                )
-
+                logger.info("Opinion auto: 1회 거래 실행 topic_id=%s direction=%s shares=%s", topic_id, status.get("trade_direction"), self.shares_per_trade)
                 result = execute_manual_trade(
                     topic_id=topic_id,
                     shares=self.shares_per_trade,
@@ -111,24 +93,34 @@ class OpinionAutoTrader:
                     taker_account_id=None,
                 )
                 self.last_result = result
-
                 self.total_trades += 1
-                # 쿨다운은 Maker 주문이 실제 제출된 경우에만 적용 (실패 시 즉시 재시도 가능)
-                if result.get("success") or result.get("maker_order_id"):
-                    self.last_trade_time = datetime.now()
-
                 if result.get("success"):
                     self.successful_trades += 1
                     logger.info("Opinion auto trade OK: %s", result.get("direction"))
                 else:
                     self.failed_trades += 1
-                    err = result.get("error") or result.get("needs_clob") or "unknown"
-                    logger.warning("Opinion auto trade failed: %s", err)
+                    logger.warning("Opinion auto trade failed: %s", result.get("error"))
 
-                time.sleep(self.check_interval * 2)
+                try:
+                    from core.trade_history import append_trade
+                    rec = {
+                        "ts": int(_time.time()),
+                        "direction": result.get("direction"),
+                        "shares": result.get("shares"),
+                        "maker_amount_usd": result.get("maker_amount_usd"),
+                        "taker_amount_usd": result.get("taker_amount_usd"),
+                        "maker_order_id": result.get("maker_order_id"),
+                        "taker_order_id": result.get("taker_order_id"),
+                        "success": result.get("success"),
+                        "source": "auto",
+                    }
+                    if result.get("error"):
+                        rec["error"] = str(result["error"])[:200]
+                    append_trade(rec)
+                except Exception as e2:
+                    logger.debug("trade_history append auto: %s", e2)
             except Exception as e:
                 logger.exception("Opinion auto loop error: %s", e)
-                time.sleep(self.check_interval)
 
     def get_statistics(self) -> dict:
         rate = (

@@ -458,9 +458,46 @@ function loadOverallChart(metric, range) {
         });
 }
 
+function loadTradeHistory() {
+    var summaryEl = document.getElementById('overallTradeSummaryText');
+    var tableEl = document.getElementById('overallTradeTable');
+    var bodyEl = document.getElementById('overallTradeTableBody');
+    if (!summaryEl) return;
+    fetchWithAuth('/api/opinion/trade-history?limit=30')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success || !data.trades) {
+                summaryEl.textContent = '거래 기록이 없습니다.';
+                if (tableEl) tableEl.style.display = 'none';
+                return;
+            }
+            var total = data.total_count || 0;
+            var ok = data.success_count || 0;
+            var makerSum = data.total_maker_usd != null ? data.total_maker_usd : 0;
+            var takerSum = data.total_taker_usd != null ? data.total_taker_usd : 0;
+            summaryEl.textContent = '최근 ' + total + '회 거래, 성공 ' + ok + '회. Maker 합계 $' + makerSum + ', Taker 합계 $' + takerSum + '.';
+            if (bodyEl && Array.isArray(data.trades)) {
+                bodyEl.innerHTML = '';
+                data.trades.slice(0, 20).forEach(function (t) {
+                    var tr = document.createElement('tr');
+                    var dt = t.ts ? new Date(t.ts * 1000) : null;
+                    var timeStr = dt ? (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + dt.getHours() + ':' + String(dt.getMinutes()).padStart(2, '0') : '—';
+                    tr.innerHTML = '<td>' + timeStr + '</td><td>' + (t.direction || '—') + '</td><td>' + (t.shares != null ? t.shares : '—') + '</td><td>' + (t.maker_amount_usd != null ? t.maker_amount_usd : '—') + '</td><td>' + (t.taker_amount_usd != null ? t.taker_amount_usd : '—') + '</td><td>' + (t.source === 'auto' ? '자동' : '수동') + '</td><td>' + (t.success ? '성공' : '실패') + '</td>';
+                    bodyEl.appendChild(tr);
+                });
+                if (tableEl) tableEl.style.display = data.trades.length ? 'table' : 'none';
+            }
+        })
+        .catch(function () {
+            summaryEl.textContent = '거래 기록을 불러올 수 없습니다.';
+            if (tableEl) tableEl.style.display = 'none';
+        });
+}
+
 function initOverallCard() {
     var card = document.getElementById('overallCard');
     if (!card) return;
+    loadTradeHistory();
     var currentMetric = 'volume';
     var currentRange = '6h';
     card.querySelectorAll('.overall-btn[data-metric]').forEach(function (btn) {
@@ -503,6 +540,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(function () { loadBtcUpDown(true); }, 3600000);
     pollOpinionAutoStats();
     setInterval(pollOpinionAutoStats, 5000);
+    setInterval(loadTradeHistory, 60000);
 });
 
 function runAutoGo() {
@@ -611,8 +649,14 @@ function runManualGo() {
                     resultEl.style.display = 'block';
                     if (data.success) {
                         resultEl.className = 'manual-trade-result success';
-                        resultEl.textContent = '실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + (data.maker_order_id || '-') + ', Taker: ' + (data.taker_order_id || '-');
-                        if (typeof setLastTradeState === 'function') setLastTradeState('success', '자전 성공. 수수료 없이 정리됨.');
+                        var makerAmt = data.maker_amount_usd != null ? ('$' + data.maker_amount_usd) : (data.maker_order_id || '-');
+                        var takerAmt = data.taker_amount_usd != null ? ('$' + data.taker_amount_usd) : (data.taker_order_id || '-');
+                        resultEl.textContent = '실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + makerAmt + ', Taker: ' + takerAmt;
+                        var msg = '자전 성공. 수수료 없이 정리됨.';
+                        if (data.maker_amount_usd != null && data.taker_amount_usd != null)
+                            msg = 'Maker $' + data.maker_amount_usd + ', Taker $' + data.taker_amount_usd + ' (수수료 없음).';
+                        if (typeof setLastTradeState === 'function') setLastTradeState('success', msg);
+                        if (typeof loadTradeHistory === 'function') loadTradeHistory();
                     } else {
                         resultEl.className = 'manual-trade-result ' + (data.needs_clob ? 'info' : 'error');
                         resultEl.textContent = data.error || '실패';

@@ -412,6 +412,25 @@ def opinion_manual_trade_execute():
                 return [_to_serializable(x) for x in obj]
             return str(obj)
         result = _to_serializable(result)
+        try:
+            from core.trade_history import append_trade
+            import time
+            rec = {
+                "ts": int(time.time()),
+                "direction": result.get("direction"),
+                "shares": result.get("shares"),
+                "maker_amount_usd": result.get("maker_amount_usd"),
+                "taker_amount_usd": result.get("taker_amount_usd"),
+                "maker_order_id": result.get("maker_order_id"),
+                "taker_order_id": result.get("taker_order_id"),
+                "success": result.get("success"),
+                "source": "manual",
+            }
+            if result.get("error"):
+                rec["error"] = str(result["error"])[:200]
+            append_trade(rec)
+        except Exception as e2:
+            logger.debug("trade_history append: %s", e2)
         return jsonify(result), 200
     except Exception as e:
         logger.exception('opinion manual trade execute: %s', e)
@@ -557,6 +576,20 @@ def _opinion_overall_usdt():
         if val is not None:
             total += val
     return {'total': round(total, 2), 'by_account': by_account, 'labels': ['현재'], 'data': [round(total, 2)]}
+
+
+@app.route('/api/opinion/trade-history')
+def opinion_trade_history():
+    """거래 기록 누적 조회. Query: limit(기본 50)."""
+    try:
+        from core.trade_history import get_trade_history
+        limit = request.args.get('limit', 50, type=int)
+        limit = max(1, min(200, limit))
+        out = get_trade_history(limit=limit)
+        return jsonify({'success': True, **out})
+    except Exception as e:
+        logger.exception('opinion trade-history: %s', e)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/opinion/overall')
