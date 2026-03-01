@@ -482,7 +482,8 @@ function loadTradeHistory() {
                     var tr = document.createElement('tr');
                     var dt = t.ts ? new Date(t.ts * 1000) : null;
                     var timeStr = dt ? (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + dt.getHours() + ':' + String(dt.getMinutes()).padStart(2, '0') : '—';
-                    tr.innerHTML = '<td>' + timeStr + '</td><td>' + (t.direction || '—') + '</td><td>' + (t.shares != null ? t.shares : '—') + '</td><td>' + (t.maker_amount_usd != null ? t.maker_amount_usd : '—') + '</td><td>' + (t.taker_amount_usd != null ? t.taker_amount_usd : '—') + '</td><td>' + (t.source === 'auto' ? '자동' : '수동') + '</td><td>' + (t.success ? '성공' : '실패') + '</td>';
+                    var resultLabel = t.round_trip_completed === true ? '성공' : (t.success === false ? '실패' : '미체결');
+                    tr.innerHTML = '<td>' + timeStr + '</td><td>' + (t.direction || '—') + '</td><td>' + (t.shares != null ? t.shares : '—') + '</td><td>' + (t.maker_amount_usd != null ? t.maker_amount_usd : '—') + '</td><td>' + (t.taker_amount_usd != null ? t.taker_amount_usd : '—') + '</td><td>' + (t.source === 'auto' ? '자동' : '수동') + '</td><td>' + resultLabel + '</td>';
                     bodyEl.appendChild(tr);
                 });
                 if (tableEl) tableEl.style.display = data.trades.length ? 'table' : 'none';
@@ -648,14 +649,17 @@ function runManualGo() {
                 if (resultEl) {
                     resultEl.style.display = 'block';
                     if (data.success) {
-                        resultEl.className = 'manual-trade-result success';
                         var makerAmt = data.maker_amount_usd != null ? ('$' + data.maker_amount_usd) : (data.maker_order_id || '-');
                         var takerAmt = data.taker_amount_usd != null ? ('$' + data.taker_amount_usd) : (data.taker_order_id || '-');
-                        resultEl.textContent = '실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + makerAmt + ', Taker: ' + takerAmt;
-                        var msg = '자전 성공. 수수료 없이 정리됨.';
-                        if (data.maker_amount_usd != null && data.taker_amount_usd != null)
-                            msg = 'Maker $' + data.maker_amount_usd + ', Taker $' + data.taker_amount_usd + ' (수수료 없음).';
-                        if (typeof setLastTradeState === 'function') setLastTradeState('success', msg);
+                        var roundTrip = data.round_trip_completed === true;
+                        resultEl.className = roundTrip ? 'manual-trade-result success' : 'manual-trade-result info';
+                        resultEl.textContent = roundTrip
+                            ? ('실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + makerAmt + ', Taker: ' + takerAmt)
+                            : ('Maker만 접수됨. 방향 ' + (data.direction || '') + ', Maker: ' + makerAmt + ' — Taker 미실행. 정산/입금 없음.');
+                        var msg = roundTrip
+                            ? (data.maker_amount_usd != null && data.taker_amount_usd != null ? 'Maker $' + data.maker_amount_usd + ', Taker $' + data.taker_amount_usd + ' (수수료 없음).' : '자전 성공. 수수료 없이 정리됨.')
+                            : (data.note || 'Maker 호가만 걸린 상태. 지갑 입금 없음.');
+                        if (typeof setLastTradeState === 'function') setLastTradeState(roundTrip ? 'success' : 'unknown', msg);
                         if (typeof loadTradeHistory === 'function') loadTradeHistory();
                     } else {
                         resultEl.className = 'manual-trade-result ' + (data.needs_clob ? 'info' : 'error');

@@ -520,6 +520,7 @@ def _run_wash_trade_via_clob(
         logger.info("Maker 주문 success=True but order_id 없음. 주문 접수된 것으로 처리.")
         return {
             "success": True,
+            "round_trip_completed": False,
             "maker_order_id": None,
             "taker_order_id": None,
             "direction": direction,
@@ -528,7 +529,7 @@ def _run_wash_trade_via_clob(
             "shares": shares,
             "maker_amount_usd": maker_amount_usd,
             "taker_amount_usd": taker_amount_usd,
-            "note": "Maker 주문 접수됨. (ID 미반환 — 앱/거래내역에서 확인하세요.)",
+            "note": "Maker 주문만 접수됨. (주문 ID 미반환 — Taker 미실행. 호가창에만 걸린 상태라 정산/지갑 입금 없음. 앱·거래내역에서 확인하세요.)",
             "maker_result": maker_res,
         }
 
@@ -595,6 +596,7 @@ def _run_wash_trade_via_clob(
         if maker_filled and taker_filled:
             return {
                 "success": True,
+                "round_trip_completed": True,
                 "maker_order_id": order_id_maker,
                 "taker_order_id": order_id_taker,
                 "direction": direction,

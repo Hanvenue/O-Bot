@@ -52,9 +52,11 @@ def get_trade_history(limit: int = 50) -> Dict[str, Any]:
         except Exception as e:
             logger.warning("trade_history read failed: %s", e)
     trades = trades[-limit:] if limit else trades
-    total_maker = sum(float(t.get("maker_amount_usd") or 0) for t in trades)
-    total_taker = sum(float(t.get("taker_amount_usd") or 0) for t in trades)
-    success_count = sum(1 for t in trades if t.get("success"))
+    # 집계는 자전 완료(round_trip_completed=True)인 건만. 미체결/구버전 건은 목록에는 보이지만 합계·성공 횟수에서 제외.
+    completed = [t for t in trades if t.get("round_trip_completed") is True]
+    total_maker = sum(float(t.get("maker_amount_usd") or 0) for t in completed)
+    total_taker = sum(float(t.get("taker_amount_usd") or 0) for t in completed)
+    success_count = len(completed)
     return {
         "trades": list(reversed(trades)),
         "total_count": len(trades),

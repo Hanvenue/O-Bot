@@ -3,6 +3,7 @@
 Flask(동기)에서 호출하므로 백그라운드 스레드 + time.sleep으로 루프 실행.
 """
 import logging
+import os
 import threading
 import time
 from datetime import datetime
@@ -15,13 +16,15 @@ from core.opinion_manual_trade import (
 
 logger = logging.getLogger(__name__)
 
+_AUTO_INTERVAL = int(os.getenv("AUTO_TRADE_INTERVAL_SEC", "3600").strip() or "3600")
+
 
 class OpinionAutoTrader:
-    """Opinion 1시간 마켓 자동 자전거래 엔진"""
+    """Opinion 1시간 마켓 자동 자전거래 엔진. 1시간(또는 AUTO_TRADE_INTERVAL_SEC)마다 1회, Maker 수수료 없음 유지."""
 
     def __init__(self):
         self.is_running = False
-        self.interval_seconds = 3600  # 1시간마다 1회 거래
+        self.interval_seconds = max(60, _AUTO_INTERVAL)  # 기본 3600(1시간). 테스트 시 .env에 60 등 설정
         self.shares_per_trade = 10
         self.maker_account_id: Optional[int] = None
 
@@ -102,21 +105,22 @@ class OpinionAutoTrader:
                     logger.warning("Opinion auto trade failed: %s", result.get("error"))
 
                 try:
-                    from core.trade_history import append_trade
-                    rec = {
-                        "ts": int(_time.time()),
-                        "direction": result.get("direction"),
-                        "shares": result.get("shares"),
-                        "maker_amount_usd": result.get("maker_amount_usd"),
-                        "taker_amount_usd": result.get("taker_amount_usd"),
-                        "maker_order_id": result.get("maker_order_id"),
-                        "taker_order_id": result.get("taker_order_id"),
-                        "success": result.get("success"),
-                        "source": "auto",
-                    }
-                    if result.get("error"):
-                        rec["error"] = str(result["error"])[:200]
-                    append_trade(rec)
+                    # 자전 완료(양쪽 체결)된 거래만 Overall에 기록.
+                    if result.get("round_trip_completed") is True:
+                        from core.trade_history import append_trade
+                        rec = {
+                            "ts": int(time.time()),
+                            "direction": result.get("direction"),
+                            "shares": result.get("shares"),
+                            "maker_amount_usd": result.get("maker_amount_usd"),
+                            "taker_amount_usd": result.get("taker_amount_usd"),
+                            "maker_order_id": result.get("maker_order_id"),
+                            "taker_order_id": result.get("taker_order_id"),
+                            "success": True,
+                            "round_trip_completed": True,
+                            "source": "auto",
+                        }
+                        append_trade(rec)
                 except Exception as e2:
                     logger.debug("trade_history append auto: %s", e2)
             except Exception as e:

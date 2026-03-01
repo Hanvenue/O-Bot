@@ -415,20 +415,21 @@ def opinion_manual_trade_execute():
         try:
             from core.trade_history import append_trade
             import time
-            rec = {
-                "ts": int(time.time()),
-                "direction": result.get("direction"),
-                "shares": result.get("shares"),
-                "maker_amount_usd": result.get("maker_amount_usd"),
-                "taker_amount_usd": result.get("taker_amount_usd"),
-                "maker_order_id": result.get("maker_order_id"),
-                "taker_order_id": result.get("taker_order_id"),
-                "success": result.get("success"),
-                "source": "manual",
-            }
-            if result.get("error"):
-                rec["error"] = str(result["error"])[:200]
-            append_trade(rec)
+            # 자전 완료(양쪽 체결)된 거래만 Overall에 기록. 미체결(Maker만 접수)은 제외.
+            if result.get("round_trip_completed") is True:
+                rec = {
+                    "ts": int(time.time()),
+                    "direction": result.get("direction"),
+                    "shares": result.get("shares"),
+                    "maker_amount_usd": result.get("maker_amount_usd"),
+                    "taker_amount_usd": result.get("taker_amount_usd"),
+                    "maker_order_id": result.get("maker_order_id"),
+                    "taker_order_id": result.get("taker_order_id"),
+                    "success": True,
+                    "round_trip_completed": True,
+                    "source": "manual",
+                }
+                append_trade(rec)
         except Exception as e2:
             logger.debug("trade_history append: %s", e2)
         return jsonify(result), 200
