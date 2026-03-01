@@ -146,10 +146,12 @@ def get_1h_market_for_trade(
     time_remaining = max(0, cutoff - now)
     if time_remaining <= 0:
         out["trade_reason"] = "시장 종료됨"
+        out["error"] = out["trade_reason"]
         return out
 
     if not skip_time_check and time_remaining > TIME_BEFORE_END:
         out["trade_reason"] = f"진입 시간 전 ({time_remaining}s 남음, {TIME_BEFORE_END}s 전부터 가능)"
+        out["error"] = out["trade_reason"]
         return out
 
     yes_token = (market_dict.get("yesTokenId") or "").strip() or None
@@ -186,6 +188,7 @@ def get_1h_market_for_trade(
         best_ask_yes = _best_price(asks_yes, want_low=True)
         if best_ask_yes is None:
             out["trade_reason"] = "Yes 호가 없음"
+            out["error"] = out["trade_reason"]
             return out
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
     taker_price_down = round(1.0 - maker_price_up, 2)

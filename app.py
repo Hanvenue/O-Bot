@@ -325,15 +325,13 @@ def opinion_btc_price_gap():
 
 @app.route('/api/opinion/manual-trade/status')
 def opinion_manual_trade_status():
-    """1시간 마켓 수동 거래 상태 (전략 미리보기, 계정 추천). Query: topic_id(선택), shares(기본 10)."""
+    """1시간 마켓 수동 거래 상태 (전략 미리보기, 계정 추천). Query: topic_id(선택), shares(기본 10). 항상 200, body에 success/error/trade_reason."""
     try:
         topic_id = request.args.get('topic_id', type=int)
         shares = request.args.get('shares', 10, type=int)
         shares = max(1, min(shares, 1000))
         status = get_1h_market_for_trade(topic_id=topic_id, skip_time_check=True, shares=shares)
-        if not status.get('success'):
-            return jsonify({'success': False, 'error': status.get('error', '상태 조회 실패')}), 400
-        return jsonify({'success': True, **status})
+        return jsonify({'success': status.get('success', False), **status})
     except Exception as e:
         logger.exception('opinion manual trade status: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
