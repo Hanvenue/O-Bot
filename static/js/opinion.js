@@ -578,46 +578,60 @@ function pollOpinionAutoStats() {
         .catch(function () {});
 }
 
-/** 수동 Go!: Shares만 입력, 방향·Maker/Taker는 서버에서 자동 설정 */
+/** 수동 Go!: Shares만 입력, 방향·Maker/Taker는 서버에서 자동 설정. 서버 처리 최대 약 2분 걸릴 수 있음. */
 function runManualGo() {
-    var sharesEl = document.getElementById('manualSharesInput');
-    var shares = (sharesEl && parseInt(sharesEl.value, 10)) || 10;
-    shares = Math.max(1, shares);
     var btn = document.getElementById('btnManualGo');
-    if (btn) { btn.disabled = true; btn.textContent = '실행 중...'; }
     var resultEl = document.getElementById('manualTradeResult');
-    var body = { shares: shares };
-    if (window.currentOpinionTopicId) body.topic_id = window.currentOpinionTopicId;
-    if (window.currentOpinionMakerAccountId != null) body.account_id = window.currentOpinionMakerAccountId;
-    if (window.currentOpinionTradeDirection) body.direction = window.currentOpinionTradeDirection;
-    fetchWithAuth('/api/opinion/manual-trade/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    })
-        .then(function (r) { return parseJsonResponse(r); })
-        .then(function (data) {
-            if (resultEl) {
-                resultEl.style.display = 'block';
-                if (data.success) {
-                    resultEl.className = 'manual-trade-result success';
-                    resultEl.textContent = '실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + (data.maker_order_id || '-') + ', Taker: ' + (data.taker_order_id || '-');
-                    if (typeof setLastTradeState === 'function') setLastTradeState('success', '자전 성공. 수수료 없이 정리됨.');
-                } else {
-                    resultEl.className = 'manual-trade-result ' + (data.needs_clob ? 'info' : 'error');
-                    resultEl.textContent = data.error || '실패';
-                    if (typeof setLastTradeState === 'function') setLastTradeState('fail', data.error || (data.needs_clob ? 'CLOB 미연동' : '실패'));
+    function restoreBtn() { if (btn) { btn.disabled = false; btn.textContent = '수동 Go!'; } }
+    try {
+        var sharesEl = document.getElementById('manualSharesInput');
+        var shares = (sharesEl && parseInt(sharesEl.value, 10)) || 10;
+        shares = Math.max(1, shares);
+        if (btn) { btn.disabled = true; btn.textContent = '서버 처리 중... (최대 2분)'; }
+        if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+        var body = { shares: shares };
+        if (window.currentOpinionTopicId) body.topic_id = window.currentOpinionTopicId;
+        if (window.currentOpinionMakerAccountId != null) body.account_id = window.currentOpinionMakerAccountId;
+        if (window.currentOpinionTradeDirection) body.direction = window.currentOpinionTradeDirection;
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, 130000) : null;
+        var opts = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        };
+        if (controller && controller.signal) opts.signal = controller.signal;
+        fetchWithAuth('/api/opinion/manual-trade/execute', opts)
+            .then(function (r) {
+                if (timeoutId) clearTimeout(timeoutId);
+                return parseJsonResponse(r);
+            })
+            .then(function (data) {
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    if (data.success) {
+                        resultEl.className = 'manual-trade-result success';
+                        resultEl.textContent = '실행 완료. 방향 ' + (data.direction || '') + ', Maker: ' + (data.maker_order_id || '-') + ', Taker: ' + (data.taker_order_id || '-');
+                        if (typeof setLastTradeState === 'function') setLastTradeState('success', '자전 성공. 수수료 없이 정리됨.');
+                    } else {
+                        resultEl.className = 'manual-trade-result ' + (data.needs_clob ? 'info' : 'error');
+                        resultEl.textContent = data.error || '실패';
+                        if (typeof setLastTradeState === 'function') setLastTradeState('fail', data.error || (data.needs_clob ? 'CLOB 미연동' : '실패'));
+                    }
                 }
-            }
-        })
-        .catch(function (err) {
-            if (resultEl) {
-                resultEl.style.display = 'block';
-                resultEl.className = 'manual-trade-result error';
-                resultEl.textContent = '오류: ' + (err.message || err);
-            }
-        })
-        .finally(function () {
-            if (btn) { btn.disabled = false; btn.textContent = '수동 Go!'; }
-        });
+            })
+            .catch(function (err) {
+                if (timeoutId) clearTimeout(timeoutId);
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    resultEl.className = 'manual-trade-result error';
+                    var msg = err.name === 'AbortError' ? '서버 응답이 2분 초과되었습니다. 서버는 계속 처리 중일 수 있으니 잠시 후 결과를 확인해 보세요.' : ('오류: ' + (err.message || err));
+                    resultEl.textContent = msg;
+                }
+            })
+            .finally(restoreBtn);
+    } catch (e) {
+        if (resultEl) { resultEl.style.display = 'block'; resultEl.className = 'manual-trade-result error'; resultEl.textContent = '오류: ' + (e.message || e); }
+        restoreBtn();
+    }
 }
