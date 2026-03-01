@@ -39,12 +39,21 @@ def _extract_result(data: dict) -> dict:
 
 
 def _orderbook_levels(ob: dict, key: str) -> list:
-    """호가창에서 bids/asks 리스트 (key는 'bids' 또는 'asks'). Opinion 응답: result 또는 result.data."""
+    """호가창에서 bids/asks 리스트. Opinion 응답: result/data/orderBook 등 여러 형식 대응."""
     res = ob.get("result") or ob.get("data") or ob
-    if isinstance(res, dict) and "data" in res:
-        res = res.get("data") or res
-    levels = res.get(key) or res.get("list") or []
-    return levels if isinstance(levels, list) else []
+    if isinstance(res, dict):
+        if "data" in res:
+            res = res.get("data") or res
+        if "orderBook" in res:
+            res = res.get("orderBook") or res
+        if "result" in res and isinstance(res.get("result"), dict):
+            res = res.get("result") or res
+    levels = res.get(key) if isinstance(res, dict) else None
+    if levels is None and isinstance(res, dict):
+        levels = res.get("list") or res.get("ask") or res.get("bid")
+    if not isinstance(levels, list):
+        levels = []
+    return levels
 
 
 def _best_price(levels: list, want_low: bool) -> Optional[float]:
@@ -184,10 +193,16 @@ def get_1h_market_for_trade(
         if not ob_yes.get("ok"):
             out["error"] = "호가창 조회 실패(Yes)"
             return out
+        # data / result 둘 다 시도 (API 응답 형식이 다를 수 있음)
         asks_yes = _orderbook_levels(ob_yes.get("data") or {}, "asks")
+        if not asks_yes:
+            asks_yes = _orderbook_levels(ob_yes.get("result") or {}, "asks")
+        if not asks_yes:
+            asks_yes = _orderbook_levels(ob_yes, "asks")
         best_ask_yes = _best_price(asks_yes, want_low=True)
         if best_ask_yes is None:
-            out["trade_reason"] = "Yes 호가 없음"
+            logger.warning("Yes 호가 없음: token=%s, 응답 키=%s", yes_token[:16] if yes_token else "", list((ob_yes.get("data") or ob_yes).keys()) if isinstance(ob_yes.get("data"), dict) else "n/a")
+            out["trade_reason"] = "Yes 호가 없음 (호가창이 비었거나 응답 형식이 다를 수 있음. 잠시 후 재시도 또는 Opinion 웹에서 해당 마켓 호가 확인)"
             out["error"] = out["trade_reason"]
             return out
     maker_price_up = max(0.01, round(best_ask_yes - 0.01, 2))
