@@ -308,6 +308,7 @@ function renderBtcUpDownCard(data) {
         '<div class="row"><strong>' + endLabel + ':</strong> ' + endStr + '</div>' +
         '<div class="row now-time"><strong>현재 시각:</strong> ' + nowStr + '</div>' +
         '<div class="row"><strong>거래량:</strong> ' + vol + '</div>' +
+        (data.notice ? ('<div class="row market-ended-notice">' + data.notice + '</div>') : '') +
         '</div></div>';
     updateSharesPriceDisplay();
 }

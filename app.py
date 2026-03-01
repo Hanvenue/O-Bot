@@ -195,7 +195,13 @@ def opinion_btc_up_down():
                     market = market.get('result') or market
             if not market:
                 return jsonify({'success': False, 'error': 'Bitcoin Up or Down 시장을 찾을 수 없습니다.'}), 404
-        return jsonify({'success': True, 'topicId': topic_id, 'result': market})
+        # 이미 종료된 구간이면 안내 문구 (다음 1시간 마켓이 아직 안 열렸을 수 있음)
+        payload = {'success': True, 'topicId': topic_id, 'result': market}
+        cutoff_sec = _opinion_cutoff_seconds(market)
+        if cutoff_sec is not None and cutoff_sec < int(time.time()):
+            payload['market_ended'] = True
+            payload['notice'] = '이 구간은 종료되었습니다. 다음 1시간 마켓이 Opinion에 아직 열리지 않았을 수 있어요.'
+        return jsonify(payload)
     except Exception as e:
         logger.exception('btc-up-down error: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
