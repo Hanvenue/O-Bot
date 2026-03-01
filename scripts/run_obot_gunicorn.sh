@@ -3,9 +3,11 @@
 # 사용: systemd ExecStart=/home/ubuntu/O-Bot/scripts/run_obot_gunicorn.sh
 set -e
 cd "$(dirname "$0")/.."
-# systemd EnvironmentFile로 안 들어왔으면 .env에서 OPINION_PROXY 읽기
-if [ -z "$OPINION_PROXY" ] && [ -f .env ]; then
-  OPINION_PROXY=$(grep -E '^OPINION_PROXY=' .env | head -1 | cut -d= -f2- | tr -d '"' | xargs) || true
+# systemd EnvironmentFile로 안 들어왔으면 .env에서 읽기 (PROXY, MULTISIG)
+if [ -f .env ]; then
+  [ -z "$OPINION_PROXY" ] && OPINION_PROXY=$(grep -E '^OPINION_PROXY=' .env | head -1 | cut -d= -f2- | tr -d '"' | xargs) || true
+  [ -z "$OPINION_MULTISIG_1" ] && export OPINION_MULTISIG_1=$(grep -E '^OPINION_MULTISIG_1=' .env | head -1 | cut -d= -f2- | tr -d '"' | xargs) || true
+  [ -z "$OPINION_MULTISIG_2" ] && export OPINION_MULTISIG_2=$(grep -E '^OPINION_MULTISIG_2=' .env | head -1 | cut -d= -f2- | tr -d '"' | xargs) || true
 fi
 # OPINION_PROXY=IP:PORT:USER:PASS → http://USER:PASS@IP:PORT
 if [ -n "$OPINION_PROXY" ]; then
