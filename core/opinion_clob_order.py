@@ -264,6 +264,12 @@ def _place_order_impl(
                 "해결: app.opinion.trade 접속 → 로그인(CLOB PK와 같은 지갑) → My Profile에서 보이는 지갑 주소를 복사 → .env에 OPINION_MULTISIG_1=(그 주소) 넣고 저장 → 서버 재시작(README '운영 시 자주 쓰는 명령어') 후 다시 시도. "
                 "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
             )
+        elif "contract" in err_msg.lower() and ("chain synced" in err_msg.lower() or "transact with" in err_msg.lower()):
+            err_msg = (
+                "BSC(이더리움) 컨트랙트 호출에 실패했습니다. "
+                "서버에서 BSC RPC에 접속 가능한지 확인하세요. .env의 BSC_RPC_URL(기본: bsc-dataseed.binance.org)이 막혀 있으면 다른 공개 RPC로 바꿔 보세요. "
+                "일시적인 BSC/네트워크 장애일 수도 있으니 잠시 후 다시 시도해 보세요."
+            )
         elif hasattr(e, "status") and hasattr(e, "body"):
             # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
             body = getattr(e, "body", None)

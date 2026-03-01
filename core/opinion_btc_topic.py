@@ -37,6 +37,14 @@ def _extract_list(data: dict) -> list:
     return []
 
 
+def _market_title(m: dict) -> str:
+    """마켓 제목 추출. API가 marketTitle / title / marketTitleDisplay 등 다를 수 있음."""
+    return (
+        (m.get("marketTitle") or m.get("title") or m.get("marketTitleDisplay") or m.get("question") or "")
+        if isinstance(m, dict) else ""
+    )
+
+
 def _is_btc_up_down(title: str) -> bool:
     """'Bitcoin Up or Down' 또는 'BTC Up or Down' 시리즈인지."""
     t = (title or "").lower()
@@ -79,26 +87,40 @@ def get_latest_bitcoin_up_down_topic_id(force_refresh: bool = False) -> Optional
         except (TypeError, ValueError, AttributeError):
             pass
         _CACHE = None
-    markets = []
-    page = 1
-    limit = 20
-    while True:
-        res = get_markets(OPINION_API_KEY, OPINION_PROXY, status="activated", page=page, limit=limit)
-        if not res.get("ok"):
-            _last_failure_reason = "Opinion 마켓 조회 실패 (API/프록시 오류). 서버 로그: journalctl -u obot"
-            logger.warning("get_markets failed: %s", res.get("data"))
-            break
-        data = res.get("data") or {}
-        lst = _extract_list(data)
-        if not lst:
-            break
-        markets.extend(lst)
-        res_inner = data.get("result")
-        total = res_inner.get("total", 0) if isinstance(res_inner, dict) else 0
-        if len(markets) >= total or len(lst) < limit:
-            break
-        page += 1
-    btc_markets = [m for m in markets if _is_btc_up_down(m.get("marketTitle") or "")]
+    def _fetch_all(status_val: str) -> list:
+        out = []
+        p = 1
+        while True:
+            res = get_markets(OPINION_API_KEY, OPINION_PROXY, status=status_val, page=p, limit=20)
+            if not res.get("ok"):
+                return out
+            data = res.get("data") or {}
+            lst = _extract_list(data)
+            if not lst:
+                break
+            out.extend(lst)
+            res_inner = data.get("result")
+            total = res_inner.get("total", 0) if isinstance(res_inner, dict) else 0
+            if len(out) >= total or len(lst) < 20:
+                break
+            p += 1
+        return out
+
+    markets = _fetch_all("activated")
+    if not markets:
+        _last_failure_reason = "Opinion 마켓 조회 실패 (API/프록시 오류). 서버 로그: journalctl -u obot"
+        logger.warning("get_markets failed (empty)")
+        return None
+
+    btc_markets = [m for m in markets if _is_btc_up_down(_market_title(m))]
+    if not btc_markets:
+        # 새 마켓이 'open' 등 다른 status로 올 수 있음 → 한 번 더 시도
+        markets_open = _fetch_all("open")
+        for m in markets_open:
+            if m not in markets:
+                markets.append(m)
+        btc_markets = [m for m in markets if _is_btc_up_down(_market_title(m))]
+
     if not btc_markets:
         _last_failure_reason = "활성 시장 중 'Bitcoin Up or Down' 시리즈가 없음 (Opinion 쪽에 해당 마켓이 없을 수 있음)"
         logger.info("Bitcoin Up or Down 시장 없음")
