@@ -323,13 +323,14 @@ def _place_order_impl(
             or "InsufficientDataBytes" in (err_msg + cause_str)
         )
         if is_nonce_eoa:
+            creds_again = _get_clob_credentials(account)
+            used_addr = (creds_again[1][:10] + "..." + creds_again[1][-6:]) if (creds_again and creds_again[1]) else "?"
             err_msg = (
                 "CLOB SDK가 지갑 주소를 Gnosis Safe로 조회하다 실패했습니다 (nonce 0 bytes). "
-                "현재 .env에 OPINION_MULTISIG_1이 없어 EOA 주소를 쓰고 있는데, SDK가 해당 주소에서 Safe 컨트랙트의 nonce를 읽으려 해 실패한 것으로 보입니다. "
-                "해결: 1) app.opinion.trade 로그인 → My Profile에서 보이는 지갑 주소(Opinion이 사용하는 주소)를 복사 → .env에 OPINION_MULTISIG_1=그주소 로 설정 후 서버 재시작. "
-                "2) Opinion에서 Gnosis Safe를 쓰는 경우 그 Safe 주소를 넣어야 합니다. EOA만 쓰는 경우 Opinion 측 안내에 따라 Safe 전환 여부를 확인해 주세요."
-            )
-            return {"success": False, "error": err_msg, "order_id": None}
+                "사용한 주소(마스킹): %s. "
+                "공식 문서상 multi_sig_addr=My Profile 주소를 .env OPINION_MULTISIG_1에 넣고 서버 재시작해 보세요."
+            ) % used_addr
+            return {"success": False, "error": err_msg, "order_id": None, "debug_used_addr_masked": used_addr}
         elif "contract" in err_msg.lower() and ("chain synced" in err_msg.lower() or "transact with" in err_msg.lower()):
             # 1) check_approval=False로 재시도 (승인은 이미 됐을 수 있음)
             try:
