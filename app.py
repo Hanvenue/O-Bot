@@ -377,12 +377,11 @@ def opinion_manual_trade_execute():
             direction=direction or None,
             maker_account_id=int(account_id) if account_id is not None else None,
         )
-        if result.get('success'):
-            return jsonify(result)
-        return jsonify(result), 400
+        # 항상 200 + JSON (클라이언트는 result.success / result.error 로 판단)
+        return jsonify(result), 200
     except Exception as e:
         logger.exception('opinion manual trade execute: %s', e)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
 @app.route('/api/opinion/auto/start', methods=['POST'])
