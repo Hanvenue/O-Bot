@@ -84,7 +84,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/O-Bot
 EnvironmentFile=/home/ubuntu/O-Bot/.env
-ExecStart=/home/ubuntu/O-Bot/venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 app:app
+ExecStart=/home/ubuntu/O-Bot/venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 90 app:app
 Restart=always
 
 [Install]

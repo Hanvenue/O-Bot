@@ -377,7 +377,16 @@ def opinion_manual_trade_execute():
             direction=direction or None,
             maker_account_id=int(account_id) if account_id is not None else None,
         )
-        # 항상 200 + JSON (클라이언트는 result.success / result.error 로 판단)
+        # JSON 직렬화 가능하도록 정리 (SDK 등에서 객체가 섞여 올 수 있음)
+        def _to_serializable(obj):
+            if obj is None or isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, dict):
+                return {k: _to_serializable(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_to_serializable(x) for x in obj]
+            return str(obj)
+        result = _to_serializable(result)
         return jsonify(result), 200
     except Exception as e:
         logger.exception('opinion manual trade execute: %s', e)
