@@ -39,11 +39,13 @@ def _extract_result(data: dict) -> dict:
 
 
 def _orderbook_levels(ob: dict, key: str) -> list:
-    """호가창에서 bids/asks 리스트. Opinion 응답: result/data/orderBook 등 여러 형식 대응."""
+    """호가창에서 bids/asks 리스트. Opinion 응답: data.data.asks 등 중첩·dict 형식 대응."""
     res = ob.get("result") or ob.get("data") or ob
     if isinstance(res, dict):
-        if "data" in res:
-            res = res.get("data") or res
+        if "data" in res and isinstance(res.get("data"), dict):
+            inner = res.get("data")
+            if inner.get("asks") is not None or inner.get("bids") is not None:
+                res = inner
         if "orderBook" in res:
             res = res.get("orderBook") or res
         if "result" in res and isinstance(res.get("result"), dict):
@@ -51,6 +53,8 @@ def _orderbook_levels(ob: dict, key: str) -> list:
     levels = res.get(key) if isinstance(res, dict) else None
     if levels is None and isinstance(res, dict):
         levels = res.get("list") or res.get("ask") or res.get("bid")
+    if isinstance(levels, dict):
+        levels = [[float(p), s] for p, s in levels.items()]
     if not isinstance(levels, list):
         levels = []
     return levels
@@ -193,8 +197,11 @@ def get_1h_market_for_trade(
         if not ob_yes.get("ok"):
             out["error"] = "호가창 조회 실패(Yes)"
             return out
-        # data / result 둘 다 시도 (API 응답 형식이 다를 수 있음)
-        asks_yes = _orderbook_levels(ob_yes.get("data") or {}, "asks")
+        # Opinion REST: data.data.asks 또는 data.asks (opinion_ws_client와 동일 경로)
+        data_part = ob_yes.get("data") or {}
+        asks_yes = _orderbook_levels(data_part, "asks")
+        if not asks_yes and isinstance(data_part.get("data"), dict):
+            asks_yes = _orderbook_levels(data_part.get("data") or {}, "asks")
         if not asks_yes:
             asks_yes = _orderbook_levels(ob_yes.get("result") or {}, "asks")
         if not asks_yes:

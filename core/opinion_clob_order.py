@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 # CLOB SDK용 호스트 (OpenAPI 베이스; /openapi 제외)
 OPINION_CLOB_HOST = os.getenv("OPINION_CLOB_HOST", "https://proxy.opinion.trade:8443")
 BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
+# BSC RPC 실패 시 시도할 대체 URL (쉼표 구분, 비어 있으면 아래 기본 목록 사용)
+_BSC_RPC_FALLBACK_RAW = (os.getenv("BSC_RPC_FALLBACKS") or "").strip()
+BSC_RPC_FALLBACKS = [u.strip() for u in _BSC_RPC_FALLBACK_RAW.split(",") if u.strip()] or [
+    "https://bsc-dataseed1.binance.org/",
+    "https://bsc-dataseed2.binance.org/",
+    "https://rpc.ankr.com/bsc",
+    "https://bsc-rpc.publicnode.com",
+    "https://bsc-dataseed.bnbchain.org",
+]
 
 
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
@@ -87,11 +96,16 @@ def get_clob_debug_info(account: OpinionAccount) -> Optional[Dict[str, Any]]:
     }
 
 
-def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] = None):
+def _get_clob_client(
+    account: OpinionAccount,
+    multi_sig_override: Optional[str] = None,
+    rpc_url_override: Optional[str] = None,
+):
     """
     Opinion CLOB SDK Client 생성.
     account.api_key, account.proxy 사용. 프록시는 Configuration.proxy + RESTClient 재생성으로 주입 (레이스 컨디션 방지).
     multi_sig_override: 지정 시 이 주소를 multi_sig_addr로 사용 (10603 재시도 시 EOA 강제용).
+    rpc_url_override: 지정 시 이 URL을 BSC RPC로 사용 (RPC 실패 시 대체 RPC 재시도용).
     """
     creds = _get_clob_credentials(account)
     if not creds:
@@ -103,9 +117,10 @@ def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] 
             multi_sig_addr = "0x" + multi_sig_addr
         # 소문자/checksummed 그대로 전달 (재시도 시 둘 다 시도)
         logger.info("CLOB client multi_sig_override 적용 (10603 재시도): %s...%s", (multi_sig_addr or "")[:8], (multi_sig_addr or "")[-4:])
+    rpc_url = (rpc_url_override or BSC_RPC_URL).strip() or BSC_RPC_URL
     # 10603 디버깅: 사용 중인 자산 주소 로그 (마스킹)
     _mask_addr = (multi_sig_addr or "")[:8] + "..." + (multi_sig_addr or "")[-4:] if (multi_sig_addr or "") else "?"
-    logger.info("CLOB client 계정 id=%s, multi_sig_addr=%s", getattr(account, "id", 1), _mask_addr)
+    logger.info("CLOB client 계정 id=%s, multi_sig_addr=%s, rpc=%s", getattr(account, "id", 1), _mask_addr, (rpc_url[:40] + "..." if len(rpc_url) > 40 else rpc_url))
     try:
         from opinion_clob_sdk import Client
     except ImportError as e:
@@ -116,7 +131,7 @@ def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] 
         host=OPINION_CLOB_HOST,
         apikey=account.api_key,
         chain_id=56,
-        rpc_url=BSC_RPC_URL,
+        rpc_url=rpc_url,
         private_key=private_key,
         multi_sig_addr=multi_sig_addr,
     )
@@ -265,9 +280,32 @@ def _place_order_impl(
                 "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
             )
         elif "contract" in err_msg.lower() and ("chain synced" in err_msg.lower() or "transact with" in err_msg.lower()):
+            # BSC RPC 실패 → 대체 RPC로 자동 재시도 (기본 URL은 이미 실패했으므로 fallback만 시도)
+            for fallback_url in BSC_RPC_FALLBACKS:
+                if (fallback_url or "").strip() == (BSC_RPC_URL or "").strip():
+                    continue
+                try:
+                    retry_client = _get_clob_client(account, rpc_url_override=fallback_url)
+                    if not retry_client:
+                        continue
+                    result = retry_client.place_order(data, check_approval=True)
+                    order_id = None
+                    if hasattr(result, "result") and hasattr(result.result, "data"):
+                        data_obj = result.result.data
+                        order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
+                    if order_id is None and hasattr(result, "result"):
+                        r = result.result
+                        order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
+                    if order_id is None and isinstance(result, dict):
+                        order_id = result.get("order_id") or result.get("id")
+                    if order_id is not None:
+                        logger.info("BSC RPC fallback 성공 rpc=%s... order_id=%s", fallback_url[:50], order_id)
+                        return {"success": True, "order_id": str(order_id), "id": order_id}
+                except Exception as retry_e:
+                    logger.warning("BSC RPC fallback %s 실패: %s", (fallback_url or "")[:50], retry_e)
             err_msg = (
-                "BSC(이더리움) 컨트랙트 호출에 실패했습니다. "
-                "서버에서 BSC RPC에 접속 가능한지 확인하세요. .env의 BSC_RPC_URL(기본: bsc-dataseed.binance.org)이 막혀 있으면 다른 공개 RPC로 바꿔 보세요. "
+                "BSC(이더리움) 컨트랙트 호출에 실패했습니다. 기본 RPC와 대체 RPC 모두 실패했습니다. "
+                "서버에서 BSC RPC에 접속 가능한지 확인하세요. .env의 BSC_RPC_URL을 다른 공개 RPC로 바꾸거나, BSC_RPC_FALLBACKS에 추가해 보세요. "
                 "일시적인 BSC/네트워크 장애일 수도 있으니 잠시 후 다시 시도해 보세요."
             )
         elif hasattr(e, "status") and hasattr(e, "body"):
