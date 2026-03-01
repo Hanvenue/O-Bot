@@ -268,8 +268,17 @@ def _place_order_impl(
             logger.warning("place order __cause__: %s", repr(e.__cause__)[:400])
         if getattr(e, "args", None):
             logger.warning("place order exception args: %s", str(e.args)[:400])
-        # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
         body = getattr(e, "body", None) if hasattr(e, "body") else None
+        # 403(10403 지역 제한): BSC fallback 의미 없음 → 바로 해석 반환
+        if "403" in err_msg or (hasattr(e, "status") and getattr(e, "status") == 403):
+            interp = interpret_opinion_api_response(
+                getattr(e, "status", 403),
+                body,
+                context="CLOB 주문",
+            )
+            if interp.get("user_message"):
+                return {"success": False, "error": interp["user_message"], "order_id": None}
+            return {"success": False, "error": "10403: Opinion API 지역 제한. .env OPINION_PROXY를 허용 지역 프록시로 바꿔 주세요.", "order_id": None}
         is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
         if is_10603 and isinstance(body, dict):
             logger.warning("10603 응답 body (기대 주소 확인용): %s", body)
@@ -325,7 +334,8 @@ def _place_order_impl(
                     return {"success": True, "order_id": str(order_id), "id": order_id}
             except Exception as no_approval_e:
                 logger.warning("place_order check_approval=False 재시도 실패: %s", no_approval_e)
-            # 2) BSC RPC 실패 → 대체 RPC로 자동 재시도
+            # 2) BSC RPC 실패 → 대체 RPC로 자동 재시도 (403 나오면 RPC 문제 아님 → 중단하고 403 메시지 반환)
+            fallback_403_msg = None
             for fallback_url in BSC_RPC_FALLBACKS:
                 if (fallback_url or "").strip() == (BSC_RPC_URL or "").strip():
                     continue
@@ -353,13 +363,33 @@ def _place_order_impl(
                                 raise
                             logger.debug("fallback rpc %s check_approval=True 실패, check_approval=False 시도: %s", fallback_url[:40], inner_e)
                 except Exception as retry_e:
+                    retry_err_str = str(retry_e)
                     logger.warning("BSC RPC fallback %s 실패: %s", (fallback_url or "")[:50], retry_e)
-            err_msg = (
-                "BSC 컨트랙트 호출에 실패했습니다 (contract/chain synced). "
-                "가능한 원인: 1) CLOB 지갑에 BNB가 없어 가스비 지불 불가 → BSC에서 해당 지갑에 소량 BNB를 넣어 주세요. "
-                "2) USDT 사용 승인(allowance) 미완 → 앱에서 한 번 거래 승인 후 재시도. "
-                "3) RPC 노드가 동기화 중이거나 일시 장애 → 잠시 후 다시 시도하거나 .env BSC_RPC_URL을 바꿔 보세요."
-            )
+                    if "403" in retry_err_str:
+                        if hasattr(retry_e, "status") and hasattr(retry_e, "body"):
+                            interp = interpret_opinion_api_response(
+                                getattr(retry_e, "status", 403),
+                                getattr(retry_e, "body", None),
+                                context="CLOB 주문",
+                            )
+                            if interp.get("user_message"):
+                                fallback_403_msg = interp["user_message"]
+                        if not fallback_403_msg:
+                            fallback_403_msg = (
+                                "10403: Opinion이 현재 IP(또는 프록시 IP)를 미국/중국/제한 지역으로 인식합니다. "
+                                "해결: .env의 OPINION_PROXY를 허용 지역(예: EU, 한국) 프록시로 바꾼 뒤 서비스 재시작. "
+                                "docs/OPINION_ERROR_10403.md 참고."
+                            )
+                        break
+            if fallback_403_msg:
+                err_msg = fallback_403_msg
+            else:
+                err_msg = (
+                    "BSC 컨트랙트 호출에 실패했습니다 (contract/chain synced). "
+                    "가능한 원인: 1) CLOB 지갑에 BNB가 없어 가스비 지불 불가 → BSC에서 해당 지갑에 소량 BNB를 넣어 주세요. "
+                    "2) USDT 사용 승인(allowance) 미완 → 앱에서 한 번 거래 승인 후 재시도. "
+                    "3) RPC 노드가 동기화 중이거나 일시 장애 → 잠시 후 다시 시도하거나 .env BSC_RPC_URL을 바꿔 보세요."
+                )
         elif hasattr(e, "status") and hasattr(e, "body"):
             # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
             body = getattr(e, "body", None)
