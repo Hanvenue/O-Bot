@@ -21,6 +21,22 @@ logger = logging.getLogger(__name__)
 OPINION_CLOB_HOST = os.getenv("OPINION_CLOB_HOST", "https://proxy.opinion.trade:8443")
 BSC_RPC_URL = os.getenv("BSC_RPC_URL", "https://bsc-dataseed.binance.org/")
 
+# BSC RPC 폴백 목록 (primary 실패 시 순서대로 재시도)
+_BSC_RPC_FALLBACKS = [
+    "https://bsc-dataseed1.binance.org/",
+    "https://bsc-dataseed2.binance.org/",
+    "https://bsc-dataseed3.binance.org/",
+    "https://bsc-dataseed4.binance.org/",
+]
+
+# web3/컨트랙트 에러 키워드 (BSC RPC 불안정 시 발생)
+_CONTRACT_ERR_KEYWORDS = (
+    "could not transact",
+    "is contract deployed",
+    "chain synced",
+    "contract function",
+)
+
 
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
@@ -87,11 +103,12 @@ def get_clob_debug_info(account: OpinionAccount) -> Optional[Dict[str, Any]]:
     }
 
 
-def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] = None):
+def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] = None, rpc_url_override: Optional[str] = None):
     """
     Opinion CLOB SDK Client 생성.
     account.api_key, account.proxy 사용. 프록시는 Configuration.proxy + RESTClient 재생성으로 주입 (레이스 컨디션 방지).
     multi_sig_override: 지정 시 이 주소를 multi_sig_addr로 사용 (10603 재시도 시 EOA 강제용).
+    rpc_url_override: 지정 시 BSC_RPC_URL 대신 사용 (RPC 폴백 재시도용).
     """
     creds = _get_clob_credentials(account)
     if not creds:
@@ -116,7 +133,7 @@ def _get_clob_client(account: OpinionAccount, multi_sig_override: Optional[str] 
         host=OPINION_CLOB_HOST,
         apikey=account.api_key,
         chain_id=56,
-        rpc_url=BSC_RPC_URL,
+        rpc_url=rpc_url_override or BSC_RPC_URL,
         private_key=private_key,
         multi_sig_addr=multi_sig_addr,
     )
@@ -224,6 +241,43 @@ def _place_order_impl(
     except Exception as e:
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
+
+        # BSC RPC 불안정 (컨트랙트 호출 실패) → 폴백 RPC로 재시도
+        is_contract_err = any(kw in err_msg.lower() for kw in _CONTRACT_ERR_KEYWORDS)
+        if is_contract_err:
+            logger.warning("BSC RPC 컨트랙트 에러 감지. 폴백 RPC 순서로 재시도합니다.")
+            for fallback_rpc in _BSC_RPC_FALLBACKS:
+                if fallback_rpc == BSC_RPC_URL:
+                    continue
+                try:
+                    retry_client = _get_clob_client(account, rpc_url_override=fallback_rpc)
+                    if not retry_client:
+                        continue
+                    result = retry_client.place_order(data, check_approval=True)
+                    order_id = None
+                    if hasattr(result, "result") and hasattr(result.result, "data"):
+                        data_obj = result.result.data
+                        order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
+                    if order_id is None and hasattr(result, "result"):
+                        r = result.result
+                        order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and ((r.data or {}).get("order_id") or (r.data or {}).get("id")))
+                    if order_id is None and isinstance(result, dict):
+                        order_id = result.get("order_id") or result.get("id")
+                    if order_id is not None:
+                        logger.info("BSC RPC 폴백 성공 (rpc=%s) order_id=%s", fallback_rpc, order_id)
+                        return {"success": True, "order_id": str(order_id), "id": order_id}
+                    # order_id 없어도 성공 응답이면 반환
+                    return {"success": True, "order_id": None, "id": None}
+                except Exception as fallback_e:
+                    logger.warning("BSC RPC 폴백 실패 (rpc=%s): %s", fallback_rpc, fallback_e)
+            err_msg = (
+                "BSC 네트워크 연결 실패: USDT 사용 승인 트랜잭션을 보낼 수 없습니다. "
+                "BSC RPC 엔드포인트가 모두 불안정합니다. 잠시 후 다시 시도하거나, "
+                ".env에 BSC_RPC_URL=<안정적인 RPC URL>을 설정해 주세요. "
+                "(예: https://bsc-dataseed1.ninicoin.io/ 또는 Ankr/QuickNode BSC 엔드포인트)"
+            )
+            return {"success": False, "error": err_msg, "order_id": None}
+
         # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
         body = getattr(e, "body", None) if hasattr(e, "body") else None
         is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
