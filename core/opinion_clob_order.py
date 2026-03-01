@@ -38,6 +38,19 @@ BSC_RPC_FALLBACKS = [u.strip() for u in _BSC_RPC_FALLBACK_RAW.split(",") if u.st
 ]
 
 
+def _set_rpc_proxy_env(account: OpinionAccount) -> None:
+    """BSC RPC가 프록시로 나가도록 HTTP_PROXY/HTTPS_PROXY 설정 (SDK 내부 Web3/requests 사용 시)."""
+    if os.getenv("BSC_RPC_USE_PROXY", "1").strip() == "0":
+        return
+    proxy_dict = get_proxy_dict(account.proxy or "")
+    if not proxy_dict:
+        return
+    url = proxy_dict.get("https") or proxy_dict.get("http")
+    if url:
+        os.environ["HTTPS_PROXY"] = url
+        os.environ["HTTP_PROXY"] = url
+
+
 def _get_clob_credentials(account: OpinionAccount) -> Optional[tuple]:
     """
     계정별 CLOB 전용 private_key, multi_sig_addr 반환.
@@ -125,6 +138,7 @@ def _get_clob_client(
         # 소문자/checksummed 그대로 전달 (재시도 시 둘 다 시도)
         logger.info("CLOB client multi_sig_override 적용 (10603 재시도): %s...%s", (multi_sig_addr or "")[:8], (multi_sig_addr or "")[-4:])
     rpc_url = (rpc_url_override or BSC_RPC_URL).strip() or BSC_RPC_URL
+    _set_rpc_proxy_env(account)
     # 10603 디버깅: 사용 중인 자산 주소 로그 (마스킹)
     _mask_addr = (multi_sig_addr or "")[:8] + "..." + (multi_sig_addr or "")[-4:] if (multi_sig_addr or "") else "?"
     logger.info("CLOB client 계정 id=%s, multi_sig_addr=%s, rpc=%s", getattr(account, "id", 1), _mask_addr, (rpc_url[:40] + "..." if len(rpc_url) > 40 else rpc_url))
