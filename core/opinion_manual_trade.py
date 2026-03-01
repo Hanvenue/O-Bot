@@ -39,9 +39,13 @@ def _extract_result(data: dict) -> dict:
 
 
 def _orderbook_levels(ob: dict, key: str) -> list:
-    """호가창에서 bids/asks 리스트. Opinion 응답: data.data.asks 등 중첩·dict 형식 대응."""
+    """호가창에서 bids/asks 리스트. Opinion 응답: result.result.asks, data.data.asks 등 중첩 대응."""
     res = ob.get("result") or ob.get("data") or ob
     if isinstance(res, dict):
+        if "result" in res and isinstance(res.get("result"), dict):
+            inner = res.get("result")
+            if inner.get("asks") is not None or inner.get("bids") is not None:
+                res = inner
         if "data" in res and isinstance(res.get("data"), dict):
             inner = res.get("data")
             if inner.get("asks") is not None or inner.get("bids") is not None:
