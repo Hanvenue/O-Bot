@@ -64,9 +64,9 @@ def get_latest_bitcoin_up_down_topic_id(force_refresh: bool = False) -> Optional
     global _CACHE, _last_failure_reason
     if force_refresh:
         _CACHE = None
-    if not has_proxy() or not OPINION_API_KEY:
-        _last_failure_reason = "API 키 또는 프록시 없음 (.env에 OPINION_API_KEY, OPINION_PROXY 또는 OPINION_PROXY_1 확인)"
-        logger.warning("Opinion API 키/프록시 없음")
+    if not OPINION_API_KEY:
+        _last_failure_reason = "API 키 없음 (.env OPINION_API_KEY 확인)"
+        logger.warning("Opinion API 키 없음")
         return None
     now = int(time.time())
     # 캐시가 유효하고, 캐시된 마켓이 "지금 진행 중"(시작 <= now <= 종료)일 때만 재사용

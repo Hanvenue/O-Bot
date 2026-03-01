@@ -384,11 +384,13 @@ def _place_order_impl(
             if fallback_403_msg:
                 err_msg = fallback_403_msg
             else:
+                detail = (err_msg or str(e))[:200]
                 err_msg = (
                     "BSC 컨트랙트 호출에 실패했습니다 (contract/chain synced). "
                     "가능한 원인: 1) CLOB 지갑에 BNB가 없어 가스비 지불 불가 → BSC에서 해당 지갑에 소량 BNB를 넣어 주세요. "
                     "2) USDT 사용 승인(allowance) 미완 → 앱에서 한 번 거래 승인 후 재시도. "
-                    "3) RPC 노드가 동기화 중이거나 일시 장애 → 잠시 후 다시 시도하거나 .env BSC_RPC_URL을 바꿔 보세요."
+                    "3) RPC 노드가 동기화 중이거나 일시 장애 → 잠시 후 다시 시도하거나 .env BSC_RPC_URL을 바꿔 보세요. "
+                    "상세: " + detail
                 )
         elif hasattr(e, "status") and hasattr(e, "body"):
             # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함

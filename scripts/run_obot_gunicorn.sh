@@ -15,4 +15,4 @@ if [ -n "$OPINION_PROXY" ]; then
     export HTTP_PROXY="http://${px_user}:${px_pass}@${px_ip}:${px_port}"
   fi
 fi
-exec ./venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 90 app:app
+exec ./venv/bin/gunicorn -w 2 -b 127.0.0.1:5000 --timeout 120 app:app

@@ -123,8 +123,8 @@ def get_1h_market_for_trade(
         "trade_reason": None,
         "strategy_preview": None,
     }
-    if not has_proxy() or not OPINION_API_KEY:
-        out["error"] = "API 키 또는 프록시를 설정해 주세요."
+    if not OPINION_API_KEY:
+        out["error"] = "API 키를 설정해 주세요 (.env OPINION_API_KEY)."
         return out
 
     tid, market_dict = get_latest_bitcoin_up_down_market()
@@ -318,8 +318,8 @@ def execute_manual_trade(
     - maker/taker 미지정 시: 계정 목록 순서로 자동 배정 (accounts[0]=Maker, accounts[1]=Taker).
     - Maker: direction 방향 LIMIT 주문 (수수료 0%), Taker: 반대 방향 매칭.
     """
-    if not has_proxy() or not OPINION_API_KEY:
-        return {"success": False, "error": "API 키 또는 프록시를 설정해 주세요."}
+    if not OPINION_API_KEY:
+        return {"success": False, "error": "API 키를 설정해 주세요 (.env OPINION_API_KEY)."}
 
     _dir_override = (direction or "").strip().upper()
     status = get_1h_market_for_trade(

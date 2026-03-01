@@ -51,7 +51,106 @@ sudo journalctl -u obot -n 200 --no-pager | grep -E "CLOB|프록시|10403"
 
 ---
 
-## 5. 참고
+## 5. VPN으로 우회하기 (서버 전체를 허용 지역 IP로 나가게)
+
+프록시를 바꿔도 10403이면, **서버에서 나가는 IP 자체**를 허용 지역으로 바꾸는 방법입니다. 서버에 VPN 클라이언트를 깔고 **EU·한국** 등 exit으로 연결한 뒤 obot을 돌리면 됩니다.
+
+### 5.1 준비
+
+- VPN 업체 하나 고르기 (예: NordVPN, ExpressVPN, Proton VPN, Mullvad 등). **서버/ Linux 사용 허용**인지 약관 확인.
+- 해당 업체에서 **EU 또는 한국** 서버용 설정 파일(OpenVPN `.ovpn` 또는 WireGuard `.conf`) 받기.
+
+### 5.2 방법 A: OpenVPN (많은 업체가 제공)
+
+```bash
+# 서버 SSH 접속 후
+sudo apt update && sudo apt install -y openvpn
+
+# 업체에서 받은 .ovpn 파일을 서버로 복사한 뒤 (예: /home/ubuntu/nl.ovpn)
+sudo openvpn --config /home/ubuntu/nl.ovpn --daemon
+
+# 나가는 IP 확인 (한국/네덜란드 등이면 OK)
+curl -s https://api.ipify.org
+```
+
+VPN 연결된 상태에서 obot 재시작:
+
+```bash
+sudo systemctl restart obot
+```
+
+이제 주문 요청은 VPN 터널로 나가므로, **.env 프록시 없이**도 10403이 사라질 수 있습니다. (그래도 프록시 쓰려면 그대로 두면 됨.)
+
+### 5.3 방법 B: WireGuard (설정이 더 단순한 경우)
+
+```bash
+sudo apt update && sudo apt install -y wireguard
+
+# 업체에서 받은 설정을 예: /etc/wireguard/wg0.conf 에 넣은 뒤
+sudo wg-quick up wg0
+
+# IP 확인
+curl -s https://api.ipify.org
+```
+
+서버 재부팅 후에도 VPN 자동 연결하려면:
+
+```bash
+sudo systemctl enable wg-quick@wg0
+```
+
+### 5.4 NordVPN (전용 IP 포함) – 서버에서 스위스/EU IP 쓰기
+
+NordVPN 계정이 있고 **전용 IP**(예: 스위스 86.38.160.227)를 쓰고 있다면, **같은 계정으로 서버(Ubuntu)에도 NordVPN을 설치**해 연결하면 서버 나가는 IP가 전용 IP로 바뀝니다.
+
+1. **서버에 NordVPN 설치**
+
+   ```bash
+   # Ubuntu 서버 SSH 접속 후
+   sh <(curl -sSf https://downloads.nordforapps.com/apps/linux/install.sh)
+   ```
+
+2. **로그인** (브라우저 링크로 인증)
+
+   ```bash
+   nordvpn login
+   ```
+
+3. **전용 IP 또는 스위스 서버로 연결**
+
+   - 전용 IP를 Nord 계정에서 이미 설정했다면:
+     ```bash
+     nordvpn connect <국가코드><서버번호>   # 예: nordvpn connect ch1234 (스위스)
+     ```
+   - 전용 IP 서버 이름은 [Nord 계정 → Dedicated IP 설정](https://my.nordaccount.com/dashboard/nordvpn/) 또는 고객지원에서 확인.
+   - 그냥 스위스 일반 서버로 연결해도 됨:
+     ```bash
+     nordvpn connect Switzerland
+     ```
+
+4. **나가는 IP 확인**
+
+   ```bash
+   curl -s https://api.ipify.org
+   ```
+   → 86.38.160.227 또는 스위스/EU 대역이면 OK.
+
+5. **obot 재시작**
+
+   ```bash
+   sudo systemctl restart obot
+   ```
+
+이후 수동 거래 다시 시도하면 Opinion에는 **서버가 VPN으로 나가는 IP**가 보이므로 10403이 사라질 수 있습니다.
+
+### 5.5 주의
+
+- VPN 끄면 다시 서버 IP로 나가서 10403이 날 수 있음. 재부팅 후에는 `nordvpn connect` 또는 `openvpn`/`wg-quick up wg0` 다시 실행할지, 서비스로 등록할지 확인.
+- VPN 업체 약관에서 **VPS/서버에서 사용 가능**한지 확인하는 것이 좋습니다.
+
+---
+
+## 6. 참고
 
 - `core/opinion_clob_order.py`: `_get_clob_client()`에서 `conf.proxy` 설정 후 `RESTClientObject(conf)`로 교체.
 - Opinion API는 요청이 들어오는 **출발 IP**로 지역을 판단합니다. 프록시를 쓰면 Opinion에는 **프록시의 exit IP**가 보입니다.
