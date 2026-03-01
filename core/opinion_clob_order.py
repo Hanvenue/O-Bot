@@ -328,9 +328,10 @@ def _place_order_impl(
                 except Exception as retry_e:
                     logger.warning("BSC RPC fallback %s 실패: %s", (fallback_url or "")[:50], retry_e)
             err_msg = (
-                "BSC(이더리움) 컨트랙트 호출에 실패했습니다. 기본 RPC와 대체 RPC 모두 실패했습니다. "
-                "서버에서 BSC RPC에 접속 가능한지 확인하세요. .env의 BSC_RPC_URL을 다른 공개 RPC로 바꾸거나, BSC_RPC_FALLBACKS에 추가해 보세요. "
-                "일시적인 BSC/네트워크 장애일 수도 있으니 잠시 후 다시 시도해 보세요."
+                "BSC 컨트랙트 호출에 실패했습니다 (contract/chain synced). "
+                "가능한 원인: 1) CLOB 지갑에 BNB가 없어 가스비 지불 불가 → BSC에서 해당 지갑에 소량 BNB를 넣어 주세요. "
+                "2) USDT 사용 승인(allowance) 미완 → 앱에서 한 번 거래 승인 후 재시도. "
+                "3) RPC 노드가 동기화 중이거나 일시 장애 → 잠시 후 다시 시도하거나 .env BSC_RPC_URL을 바꿔 보세요."
             )
         elif hasattr(e, "status") and hasattr(e, "body"):
             # SDK는 body를 문자열로 줄 수 있음 (JSON). interpret에서 파싱함
