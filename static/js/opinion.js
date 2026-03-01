@@ -314,11 +314,14 @@ function renderBtcUpDownCard(data) {
     updateSharesPriceDisplay();
 }
 
+var _marketEndedRetryTimer = null;
+
 async function loadBtcUpDown(forceRefresh) {
     var box = document.getElementById('btcUpDownResult');
     if (!box) return;
     box.innerHTML = '불러오는 중...';
     box.classList.add('api-result-box');
+    if (_marketEndedRetryTimer) { clearTimeout(_marketEndedRetryTimer); _marketEndedRetryTimer = null; }
     try {
         var url = '/api/opinion/btc-up-down' + (forceRefresh ? '?refresh=1' : '');
         var res = await fetchWithAuth(url);
@@ -335,9 +338,8 @@ async function loadBtcUpDown(forceRefresh) {
         }
         if (data.success && (data.result !== undefined || data.topicId)) {
             renderBtcUpDownCard(data);
-            if (window._btcUpDownRetryTimer) { clearTimeout(window._btcUpDownRetryTimer); window._btcUpDownRetryTimer = null; }
             if (data.market_ended) {
-                window._btcUpDownRetryTimer = setTimeout(function () { loadBtcUpDown(true); }, 60000);
+                _marketEndedRetryTimer = setTimeout(function () { loadBtcUpDown(true); }, 60000);
             }
         } else {
             box.innerHTML = data.error || '실패';
