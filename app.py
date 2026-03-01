@@ -44,6 +44,8 @@ def require_login():
     """로그인되지 않은 사용자는 접속 페이지로 리다이렉트"""
     if request.endpoint in (None, 'static'):
         return
+    if request.method == 'OPTIONS':
+        return '', 200
     if request.endpoint == 'login' or request.path == url_for('login'):
         return
     if request.endpoint == 'check_password' or request.path == url_for('check_password'):
@@ -370,9 +372,11 @@ def opinion_manual_trade_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/opinion/manual-trade/execute', methods=['POST'])
+@app.route('/api/opinion/manual-trade/execute', methods=['POST', 'OPTIONS'])
 def opinion_manual_trade_execute():
     """1시간 마켓 수동 거래 실행. Body: topic_id(선택), account_id, shares, direction(UP|DOWN)."""
+    if request.method == 'OPTIONS':
+        return '', 200
     try:
         data = request.get_json() or {}
         topic_id = data.get('topic_id')
