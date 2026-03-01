@@ -229,8 +229,9 @@ def _place_order_impl(
     order_type = MARKET_ORDER if order_type_name == "MARKET_ORDER" else LIMIT_ORDER
     # MARKET 주문 시 SDK에 넘기는 price는 1.0(슬리피지 상한 최대). amount_quote는 원래 price 기준 유지.
     sdk_price = "1.0" if order_type_name == "MARKET_ORDER" else str(round(float(price), 2))
-    # makerAmountInQuoteToken must be at least 1 (USDT). 정수로 올려서 전달.
-    amount_str = str(max(1, int(round(amount_quote))))
+    # makerAmountInQuoteToken: human-readable 문자열, 최소 1 USDT (문서: "10" = 10 USDT)
+    amount_quote = max(1.0, round(amount_quote, 2))
+    amount_str = str(int(amount_quote)) if amount_quote == int(amount_quote) else f"{amount_quote:.2f}"
 
     try:
         data = PlaceOrderDataInput(
@@ -263,6 +264,10 @@ def _place_order_impl(
         err_msg = str(e)
         logger.exception("place order error: %s", err_msg)
         logger.warning("place order raw exception type=%s repr=%s", type(e).__name__, repr(e)[:500])
+        if getattr(e, "__cause__", None):
+            logger.warning("place order __cause__: %s", repr(e.__cause__)[:400])
+        if getattr(e, "args", None):
+            logger.warning("place order exception args: %s", str(e.args)[:400])
         # 10603: body에 code로 올 수도 있음 (SDK 래핑 방식에 따라 str(e)에 없을 수 있음)
         body = getattr(e, "body", None) if hasattr(e, "body") else None
         is_10603 = "10603" in err_msg or (isinstance(body, dict) and body.get("code") == 10603)
@@ -304,7 +309,23 @@ def _place_order_impl(
                 "서버 로그에 '10603 응답 body'가 남으니 필요 시 확인."
             )
         elif "contract" in err_msg.lower() and ("chain synced" in err_msg.lower() or "transact with" in err_msg.lower()):
-            # BSC RPC 실패 → 대체 RPC로 자동 재시도 (기본 URL은 이미 실패했으므로 fallback만 시도)
+            # 1) check_approval=False로 재시도 (승인은 이미 됐을 수 있음)
+            try:
+                result = client.place_order(data, check_approval=False)
+                order_id = None
+                if hasattr(result, "result") and hasattr(result.result, "data"):
+                    order_id = getattr(result.result.data, "order_id", None) or getattr(result.result.data, "id", None)
+                if order_id is None and hasattr(result, "result"):
+                    r = result.result
+                    order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
+                if order_id is None and isinstance(result, dict):
+                    order_id = result.get("order_id") or result.get("id")
+                if order_id is not None:
+                    logger.info("place_order check_approval=False 재시도 성공 order_id=%s", order_id)
+                    return {"success": True, "order_id": str(order_id), "id": order_id}
+            except Exception as no_approval_e:
+                logger.warning("place_order check_approval=False 재시도 실패: %s", no_approval_e)
+            # 2) BSC RPC 실패 → 대체 RPC로 자동 재시도
             for fallback_url in BSC_RPC_FALLBACKS:
                 if (fallback_url or "").strip() == (BSC_RPC_URL or "").strip():
                     continue
@@ -312,19 +333,25 @@ def _place_order_impl(
                     retry_client = _get_clob_client(account, rpc_url_override=fallback_url)
                     if not retry_client:
                         continue
-                    result = retry_client.place_order(data, check_approval=True)
-                    order_id = None
-                    if hasattr(result, "result") and hasattr(result.result, "data"):
-                        data_obj = result.result.data
-                        order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
-                    if order_id is None and hasattr(result, "result"):
-                        r = result.result
-                        order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
-                    if order_id is None and isinstance(result, dict):
-                        order_id = result.get("order_id") or result.get("id")
-                    if order_id is not None:
-                        logger.info("BSC RPC fallback 성공 rpc=%s... order_id=%s", fallback_url[:50], order_id)
-                        return {"success": True, "order_id": str(order_id), "id": order_id}
+                    for check_app in (True, False):
+                        try:
+                            result = retry_client.place_order(data, check_approval=check_app)
+                            order_id = None
+                            if hasattr(result, "result") and hasattr(result.result, "data"):
+                                data_obj = result.result.data
+                                order_id = getattr(data_obj, "order_id", None) or getattr(data_obj, "id", None)
+                            if order_id is None and hasattr(result, "result"):
+                                r = result.result
+                                order_id = getattr(r, "order_id", None) or (isinstance(getattr(r, "data", None), dict) and (r.data or {}).get("order_id") or (r.data or {}).get("id"))
+                            if order_id is None and isinstance(result, dict):
+                                order_id = result.get("order_id") or result.get("id")
+                            if order_id is not None:
+                                logger.info("BSC RPC fallback 성공 rpc=%s check_approval=%s order_id=%s", fallback_url[:50], check_app, order_id)
+                                return {"success": True, "order_id": str(order_id), "id": order_id}
+                        except Exception as inner_e:
+                            if not check_app:
+                                raise
+                            logger.debug("fallback rpc %s check_approval=True 실패, check_approval=False 시도: %s", fallback_url[:40], inner_e)
                 except Exception as retry_e:
                     logger.warning("BSC RPC fallback %s 실패: %s", (fallback_url or "")[:50], retry_e)
             err_msg = (
