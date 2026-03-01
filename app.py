@@ -176,14 +176,17 @@ def opinion_login():
 
 @app.route('/api/opinion/btc-up-down')
 def opinion_btc_up_down():
-    """Bitcoin Up or Down 시리즈 중 최신 시장 전체 리턴값. 1시간 캐시."""
+    """Bitcoin Up or Down 시리즈 중 최신 시장 전체 리턴값. ?refresh=1 시 캐시 무시."""
     try:
         api_key, proxy = _opinion_auth()
         if not api_key:
             return jsonify({'success': False, 'error': 'API 키 또는 프록시를 설정해 주세요.'}), 400
-        topic_id, market = get_latest_bitcoin_up_down_market()
+        force_refresh = request.args.get('refresh') in ('1', 'true', 'yes')
+        topic_id, market = get_latest_bitcoin_up_down_market(force_refresh=force_refresh)
         if not topic_id:
-            return jsonify({'success': False, 'error': 'Bitcoin Up or Down 시장을 찾을 수 없습니다.'}), 404
+            from core.opinion_btc_topic import get_last_btc_up_down_failure_reason
+            reason = get_last_btc_up_down_failure_reason() or "Bitcoin Up or Down 시장을 찾을 수 없습니다."
+            return jsonify({'success': False, 'error': reason}), 404
         if not market:
             res = get_market(topic_id, api_key, proxy)
             if res.get('ok') and res.get('data'):
@@ -259,9 +262,11 @@ def opinion_btc_price_gap():
     try:
         topic_id, market = get_latest_bitcoin_up_down_market()
         if not topic_id or not market:
+            from core.opinion_btc_topic import get_last_btc_up_down_failure_reason
+            reason = get_last_btc_up_down_failure_reason() or "Opinion API/프록시 확인: .env의 OPINION_API_KEY, OPINION_PROXY, 서버 로그 journalctl -u obot"
             return jsonify({
                 'success': False,
-                'error': '1시간 마켓 없음 (Opinion API/프록시 확인: .env의 OPINION_API_KEY, OPINION_PROXY, 서버 로그 journalctl -u obot)',
+                'error': f'1시간 마켓 없음. {reason}',
             }), 404
         start_ts = _opinion_market_start_timestamp(market)
         if start_ts is None:

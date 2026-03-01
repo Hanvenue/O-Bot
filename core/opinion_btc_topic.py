@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 _CACHE: Optional[tuple] = None  # (topic_id, market_dict, expires_at)
 _CACHE_TTL = 300  # 5분. 종료된 마켓은 즉시 무효화(아래에서 cutoff 체크)
+_last_failure_reason: Optional[str] = None  # 마지막 실패 사유 (UI 표시용)
 
 _btc_patterns = ("bitcoin up or down", "btc up or down")
 
@@ -42,21 +43,25 @@ def _is_btc_up_down(title: str) -> bool:
     return any(p in t for p in _btc_patterns)
 
 
-def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
+def get_latest_bitcoin_up_down_topic_id(force_refresh: bool = False) -> Optional[int]:
     """
     Opinion.trade 활성 시장 API를 스캔하여
     'Bitcoin Up or Down' 시리즈 중 현재 진행 중인( cutoff > now ) marketId를 반환.
     캐시 5분; 캐시된 마켓이 종료되면 자동 재조회.
+    force_refresh=True 시 캐시 무시하고 API 재조회.
 
     Returns:
         int: marketId (topicId), 없으면 None
     """
-    global _CACHE
+    global _CACHE, _last_failure_reason
+    if force_refresh:
+        _CACHE = None
     if not has_proxy() or not OPINION_API_KEY:
+        _last_failure_reason = "API 키 또는 프록시 없음 (.env에 OPINION_API_KEY, OPINION_PROXY 또는 OPINION_PROXY_1 확인)"
         logger.warning("Opinion API 키/프록시 없음")
         return None
     now = int(time.time())
-    # 캐시가 유효하고, 캐시된 마켓이 아직 종료 전(cutoff > now)일 때만 재사용
+    # 캐시가 유효하고, 캐시된 마켓이 "지금 진행 중"(시작 <= now <= 종료)일 때만 재사용
     if _CACHE and len(_CACHE) >= 3 and _CACHE[2] > now:
         try:
             m = _CACHE[1]
@@ -66,10 +71,11 @@ def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
             else:
                 t = int(float(t))
             cutoff_sec = t // 1000 if t > 1e12 else t
-            if cutoff_sec > now:
+            start_sec = cutoff_sec - 3600
+            # 진행 중인 구간이면 캐시 사용; 이미 종료됐거나 아직 시작 전이면 재조회
+            if start_sec <= now <= cutoff_sec:
                 return _CACHE[0]
-            # 마켓 이미 종료됨 → 캐시 버리고 새로 조회
-            logger.info("캐시된 1시간 마켓 종료됨(cutoff=%s), 재조회", cutoff_sec)
+            logger.info("캐시된 1시간 마켓이 지금 구간 아님(start=%s cutoff=%s now=%s), 재조회", start_sec, cutoff_sec, now)
         except (TypeError, ValueError, AttributeError):
             pass
         _CACHE = None
@@ -79,6 +85,7 @@ def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
     while True:
         res = get_markets(OPINION_API_KEY, OPINION_PROXY, status="activated", page=page, limit=limit)
         if not res.get("ok"):
+            _last_failure_reason = "Opinion 마켓 조회 실패 (API/프록시 오류). 서버 로그: journalctl -u obot"
             logger.warning("get_markets failed: %s", res.get("data"))
             break
         data = res.get("data") or {}
@@ -93,6 +100,7 @@ def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
         page += 1
     btc_markets = [m for m in markets if _is_btc_up_down(m.get("marketTitle") or "")]
     if not btc_markets:
+        _last_failure_reason = "활성 시장 중 'Bitcoin Up or Down' 시리즈가 없음 (Opinion 쪽에 해당 마켓이 없을 수 있음)"
         logger.info("Bitcoin Up or Down 시장 없음")
         return None
 
@@ -120,19 +128,28 @@ def get_latest_bitcoin_up_down_topic_id() -> Optional[int]:
             chosen = max(btc_markets, key=_cutoff_ts)
     topic_id = chosen.get("marketId")
     if topic_id is not None:
+        _last_failure_reason = None
         _CACHE = (int(topic_id), chosen, now + _CACHE_TTL)
         logger.info("Bitcoin Up or Down 최신 topicId=%s (캐시 %ds, 종료 후 자동 무효)", topic_id, _CACHE_TTL)
+    else:
+        _last_failure_reason = "마켓 데이터에 marketId 없음"
     return topic_id
 
 
-def get_latest_bitcoin_up_down_market() -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
+def get_last_btc_up_down_failure_reason() -> Optional[str]:
+    """1시간 마켓 조회가 실패했을 때의 마지막 사유. UI/API 에러 메시지용."""
+    return _last_failure_reason
+
+
+def get_latest_bitcoin_up_down_market(force_refresh: bool = False) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
     """
     Bitcoin Up or Down 최신 시장 전체 데이터 반환.
+    force_refresh=True 시 캐시 무시하고 API 재조회 (리프레시 버튼용).
     Returns:
         (topic_id, market_dict) 또는 (None, None)
     """
     global _CACHE
-    tid = get_latest_bitcoin_up_down_topic_id()
+    tid = get_latest_bitcoin_up_down_topic_id(force_refresh=force_refresh)
     if tid is None:
         return None, None
     if _CACHE and len(_CACHE) >= 2:

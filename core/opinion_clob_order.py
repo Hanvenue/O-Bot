@@ -75,12 +75,15 @@ def get_clob_debug_info(account: OpinionAccount) -> Optional[Dict[str, Any]]:
             return addr or "—"
         return (addr or "")[:8] + "..." + (addr or "")[-6:]
 
+    proxy_configured = bool(get_proxy_dict(account.proxy or ""))
     return {
         "account_id": aid,
         "multi_sig_addr_sent": _mask(multi_sig_addr),
         "eoa_from_account": _mask(eoa),
         "opination_multisig_set": bool(env_multisig),
+        "proxy_configured": proxy_configured,
         "hint": "app.opinion.trade My Profile에 보이는 주소가 multi_sig_addr_sent와 같아야 합니다.",
+        "hint_10403": "10403이면 proxy_configured가 true인지, 서버 로그에 '프록시 적용됨'이 나오는지 확인하세요.",
     }
 
 

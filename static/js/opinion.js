@@ -312,13 +312,14 @@ function renderBtcUpDownCard(data) {
     updateSharesPriceDisplay();
 }
 
-async function loadBtcUpDown() {
+async function loadBtcUpDown(forceRefresh) {
     var box = document.getElementById('btcUpDownResult');
     if (!box) return;
     box.innerHTML = '불러오는 중...';
     box.classList.add('api-result-box');
     try {
-        var res = await fetchWithAuth('/api/opinion/btc-up-down');
+        var url = '/api/opinion/btc-up-down' + (forceRefresh ? '?refresh=1' : '');
+        var res = await fetchWithAuth(url);
         var text = await res.text();
         var data;
         try {
@@ -471,13 +472,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // Up/Down·예상 거래액·GAP → Maker 주기 갱신 (고정처럼 보이던 문제 해결)
     setInterval(updateSharesPriceDisplay, 5000);
     document.getElementById('btnAddAccount') && document.getElementById('btnAddAccount').addEventListener('click', openLoginModal);
-    document.getElementById('btnLoadBtcUpDown') && document.getElementById('btnLoadBtcUpDown').addEventListener('click', function () { loadBtcUpDown(); updateBtcPriceGapCard(); });
+    document.getElementById('btnLoadBtcUpDown') && document.getElementById('btnLoadBtcUpDown').addEventListener('click', function () { loadBtcUpDown(true); updateBtcPriceGapCard(); });
     document.querySelector('#opinionLoginModal .modal-overlay') && document.querySelector('#opinionLoginModal .modal-overlay').addEventListener('click', closeLoginModal);
     document.getElementById('opinionLoginForm') && document.getElementById('opinionLoginForm').addEventListener('submit', submitOpinionLogin);
     document.getElementById('btnAutoGo') && document.getElementById('btnAutoGo').addEventListener('click', runAutoGo);
     document.getElementById('btnAutoStop') && document.getElementById('btnAutoStop').addEventListener('click', runAutoStop);
     document.getElementById('btnManualGo') && document.getElementById('btnManualGo').addEventListener('click', runManualGo);
-    setInterval(loadBtcUpDown, 3600000);
+    setInterval(function () { loadBtcUpDown(true); }, 3600000);
     pollOpinionAutoStats();
     setInterval(pollOpinionAutoStats, 5000);
 });
