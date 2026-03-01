@@ -329,6 +329,19 @@ def execute_manual_trade(
             "error": status.get("error") or status.get("trade_reason") or "거래 조건 미충족",
         }
 
+    # topic_id가 None 또는 0이면 status에서 채움 (1시간 마켓 자동 선택 시)
+    try:
+        tid_val = int(topic_id) if topic_id is not None else 0
+    except (TypeError, ValueError):
+        tid_val = 0
+    topic_id = status.get("topic_id") if (topic_id is None or tid_val == 0) else topic_id
+    if topic_id is None:
+        return {"success": False, "error": "마켓 ID를 확인할 수 없습니다. 1시간 마켓을 불러온 뒤 다시 시도해 주세요."}
+    try:
+        topic_id = int(topic_id)
+    except (TypeError, ValueError):
+        return {"success": False, "error": "마켓 ID 형식 오류."}
+
     accounts = opinion_account_manager.get_all()
     if len(accounts) < 2:
         return {"success": False, "error": "자전거래는 최소 2개 계정이 필요합니다."}
